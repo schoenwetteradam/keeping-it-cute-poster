@@ -8,6 +8,33 @@ const PLATFORMS = [
   { id: 'linkedin', label: 'LinkedIn', emoji: '💼', color: 'bg-blue-700' },
 ]
 
+const GOALS = [
+  {
+    id: 'booth_renters',
+    label: 'Attract Booth Renters',
+    emoji: '💈',
+    description: 'Target stylists & beauty pros looking for a booth to rent',
+  },
+  {
+    id: 'new_clients',
+    label: 'Attract New Clients',
+    emoji: '💇',
+    description: 'Reach people looking for a new stylist or salon',
+  },
+  {
+    id: 'showcase',
+    label: 'Showcase My Work',
+    emoji: '✨',
+    description: 'Show off a transformation, style, or service — no specific pitch',
+  },
+  {
+    id: 'community',
+    label: 'Build Community',
+    emoji: '🤝',
+    description: 'Engage followers, share tips, or celebrate the salon culture',
+  },
+]
+
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
@@ -28,6 +55,7 @@ function CopyButton({ text }) {
 export default function Home() {
   const [employeeName, setEmployeeName] = useState('')
   const [context, setContext] = useState('')
+  const [goal, setGoal] = useState('booth_renters')
   const [selectedPlatforms, setSelectedPlatforms] = useState(['facebook', 'instagram', 'linkedin'])
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -70,6 +98,7 @@ export default function Home() {
       const formData = new FormData()
       formData.append('employeeName', employeeName)
       formData.append('context', context)
+      formData.append('goal', goal)
       formData.append('platforms', JSON.stringify(selectedPlatforms))
       if (file) formData.append('file', file)
 
@@ -123,6 +152,32 @@ export default function Home() {
               placeholder="e.g. Just finished this gorgeous balayage on a client — she came in wanting beachy waves and we DELIVERED. She cried happy tears! Used Redken shades..."
               className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E91E8C] focus:border-transparent transition text-gray-800 resize-none"
             />
+          </div>
+
+          {/* Goal / Audience */}
+          <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">What's the goal of this post? 🎯</label>
+            <p className="text-xs text-gray-400 mb-4">This tells the AI who you're trying to reach so the message lands right.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {GOALS.map(g => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setGoal(g.id)}
+                  className={`text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                    goal === g.id
+                      ? 'border-[#E91E8C] bg-pink-50'
+                      : 'border-gray-100 hover:border-pink-200 bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-semibold text-sm text-gray-800 mb-0.5">
+                    <span>{g.emoji}</span> {g.label}
+                    {goal === g.id && <span className="ml-auto text-[#E91E8C] text-xs font-bold">✓ Selected</span>}
+                  </div>
+                  <p className="text-xs text-gray-400 leading-snug">{g.description}</p>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* File Upload */}
@@ -230,7 +285,7 @@ export default function Home() {
               </div>
             ))}
             <button
-              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null) }}
+              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters') }}
               className="w-full py-3 rounded-2xl border-2 border-pink-200 text-[#E91E8C] font-semibold hover:bg-pink-50 transition-colors"
             >
               Create Another Post
