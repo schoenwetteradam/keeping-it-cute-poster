@@ -33,3 +33,6 @@ yarn-error.log*
 next-env.d.ts
 .claude/
 .linkedin-token.json
+
+/uploads/
+/data/
