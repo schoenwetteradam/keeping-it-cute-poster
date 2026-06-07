@@ -9,6 +9,7 @@ export async function POST(request) {
     const goal = formData.get('goal') || 'showcase'
     const platforms = JSON.parse(formData.get('platforms'))
     const file = formData.get('file') // may be null
+    const libraryImageUrl = formData.get('libraryImageUrl')
 
     const client = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
@@ -33,6 +34,24 @@ export async function POST(request) {
             data: base64,
           },
         })
+      }
+    }
+
+    // If no direct file upload but library URL provided, fetch and encode it
+    if ((!file || file.size === 0) && libraryImageUrl) {
+      try {
+        const imgRes = await fetch(`http://localhost:3000${libraryImageUrl}`)
+        const imgBuffer = await imgRes.arrayBuffer()
+        const base64 = Buffer.from(imgBuffer).toString('base64')
+        const mimeType = imgRes.headers.get('content-type') || 'image/jpeg'
+        if (mimeType.startsWith('image/')) {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: mimeType, data: base64 },
+          })
+        }
+      } catch (e) {
+        // silently skip if image fetch fails
       }
     }
 
@@ -92,7 +111,7 @@ For LinkedIn specifically: ${goalInfo.linkedinAngle}
 ## Employee Context
 Name: ${employeeName}
 Post context / notes: ${context || 'No additional context — use what you know about the goal to craft the post.'}
-${file && file.type && file.type.startsWith('image/') ? 'An image was uploaded — reference what you see in it naturally within the post.' : ''}
+${(file && file.type && file.type.startsWith('image/')) || libraryImageUrl ? 'An image was provided — reference what you see in it naturally within the post.' : ''}
 
 ## Platform Instructions
 ${platformsToGenerate.map(p => `### ${p}\n${platformDescriptions[p]}`).join('\n\n')}
