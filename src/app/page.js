@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 
 const PLATFORMS = [
   { id: 'facebook', label: 'Facebook', emoji: '📘', color: 'bg-blue-600' },
@@ -64,6 +64,42 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
+  const [posting, setPosting] = useState({})
+  const [postResults, setPostResults] = useState({})
+  const [linkedinConnected, setLinkedinConnected] = useState(null)
+  const [linkedinToast, setLinkedinToast] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/linkedin/status')
+      .then(r => r.json())
+      .then(d => setLinkedinConnected(d.connected && !d.expired))
+      .catch(() => setLinkedinConnected(false))
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('linkedin') === 'connected') {
+      setLinkedinToast(true)
+      setTimeout(() => setLinkedinToast(false), 5000)
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
+
+  const postToPlatform = async (platformId, text) => {
+    setPosting(prev => ({ ...prev, [platformId]: 'loading' }))
+    try {
+      const res = await fetch(`/api/post/${platformId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error)
+      setPosting(prev => ({ ...prev, [platformId]: 'success' }))
+      setPostResults(prev => ({ ...prev, [platformId]: data }))
+    } catch (err) {
+      setPosting(prev => ({ ...prev, [platformId]: 'error' }))
+      setPostResults(prev => ({ ...prev, [platformId]: { error: err.message } }))
+    }
+  }
 
   const handleFile = (f) => {
     if (!f) return
@@ -266,26 +302,90 @@ export default function Home() {
         {/* Results */}
         {posts && (
           <div className="mt-10 space-y-5">
-            <h2 className="text-xl font-bold text-[#1a1a2e] text-center">Your Posts Are Ready! 🎉</h2>
-            {PLATFORMS.filter(p => posts[p.id]).map(p => (
-              <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-pink-100 overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-pink-50">
-                  <div className="flex items-center gap-2 font-bold text-gray-800">
-                    <span className="text-xl">{p.emoji}</span>
-                    <span>{p.label}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">{posts[p.id].length} chars</span>
-                    <CopyButton text={posts[p.id]} />
-                  </div>
-                </div>
-                <div className="px-6 py-5">
-                  <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-sm">{posts[p.id]}</pre>
-                </div>
+            {linkedinToast && (
+              <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm font-medium">
+                ✓ LinkedIn connected successfully! You can now post directly to LinkedIn.
               </div>
-            ))}
+            )}
+
+            <h2 className="text-xl font-bold text-[#1a1a2e] text-center">Your Posts Are Ready! 🎉</h2>
+
+            {linkedinConnected === false && posts['linkedin'] && (
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl px-4 py-3 text-sm flex items-center justify-between">
+                <span>⚠️ LinkedIn not connected — connect to enable direct posting</span>
+                <a
+                  href="/api/linkedin/auth"
+                  className="ml-4 text-blue-700 font-semibold underline hover:no-underline whitespace-nowrap"
+                >
+                  Connect LinkedIn →
+                </a>
+              </div>
+            )}
+
+            {PLATFORMS.filter(p => posts[p.id]).map(p => {
+              const status = posting[p.id] || 'idle'
+              const result = postResults[p.id]
+              return (
+                <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-pink-100 overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-pink-50 flex-wrap gap-2">
+                    <div className="flex items-center gap-2 font-bold text-gray-800">
+                      <span className="text-xl">{p.emoji}</span>
+                      <span>{p.label}</span>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-xs text-gray-400">{posts[p.id].length} chars</span>
+                      <CopyButton text={posts[p.id]} />
+                      {p.id === 'linkedin' && linkedinConnected === false ? (
+                        <a
+                          href="/api/linkedin/auth"
+                          className="text-sm px-3 py-1.5 rounded-lg bg-blue-700 text-white font-medium hover:bg-blue-800 transition-colors"
+                        >
+                          Connect LinkedIn
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => postToPlatform(p.id, posts[p.id])}
+                          disabled={status === 'loading' || status === 'success'}
+                          className="text-sm px-3 py-1.5 rounded-lg bg-[#E91E8C] text-white font-medium hover:bg-pink-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        >
+                          {status === 'loading' ? (
+                            <>
+                              <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12 0 12 12h4a8 8 0 01-8 8" />
+                              </svg>
+                              Posting...
+                            </>
+                          ) : status === 'success' ? (
+                            <span className="text-green-100">✓ Posted!</span>
+                          ) : (
+                            'Post Now 🚀'
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {status === 'success' && result?.url && (
+                    <div className="px-6 py-2 bg-green-50 border-b border-green-100 text-sm text-green-700 flex items-center gap-2">
+                      ✓ Successfully posted!
+                      <a href={result.url} target="_blank" rel="noopener noreferrer" className="underline font-medium hover:no-underline ml-1">
+                        View Post →
+                      </a>
+                    </div>
+                  )}
+                  {status === 'error' && result?.error && (
+                    <div className="px-6 py-2 bg-red-50 border-b border-red-100 text-sm text-red-600">
+                      ⚠️ {result.error}
+                    </div>
+                  )}
+                  <div className="px-6 py-5">
+                    <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-sm">{posts[p.id]}</pre>
+                  </div>
+                </div>
+              )
+            })}
             <button
-              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters') }}
+              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters'); setPosting({}); setPostResults({}) }}
               className="w-full py-3 rounded-2xl border-2 border-pink-200 text-[#E91E8C] font-semibold hover:bg-pink-50 transition-colors"
             >
               Create Another Post
