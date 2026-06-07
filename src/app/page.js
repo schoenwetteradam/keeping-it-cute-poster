@@ -52,7 +52,164 @@ function CopyButton({ text }) {
   )
 }
 
+function MediaLibrary({ onSelect }) {
+  const [media, setMedia] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [uploaderName, setUploaderName] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
+
+  const loadMedia = async () => {
+    const res = await fetch('/api/media')
+    const data = await res.json()
+    setMedia(data.media || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { loadMedia() }, [])
+
+  const handleUpload = async (f) => {
+    if (!f) return
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('file', f)
+    formData.append('uploadedBy', uploaderName)
+    await fetch('/api/media/upload', { method: 'POST', body: formData })
+    await loadMedia()
+    setUploading(false)
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this file?')) return
+    await fetch('/api/media', { method: 'DELETE', body: JSON.stringify({ id }), headers: { 'Content-Type': 'application/json' } })
+    await loadMedia()
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Upload to library */}
+      <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-6">
+        <h3 className="font-semibold text-gray-700 mb-4">Add to Library</h3>
+        <div className="flex gap-3 mb-4">
+          <input
+            type="text"
+            value={uploaderName}
+            onChange={e => setUploaderName(e.target.value)}
+            placeholder="Your name (optional)"
+            className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#E91E8C]"
+          />
+        </div>
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-dashed border-pink-200 hover:border-[#E91E8C] rounded-xl p-8 text-center cursor-pointer hover:bg-pink-50 transition-all"
+        >
+          {uploading ? (
+            <p className="text-[#E91E8C] font-medium">Uploading...</p>
+          ) : (
+            <>
+              <span className="text-3xl block mb-2">📤</span>
+              <p className="font-medium text-gray-600">Click to upload photo or video</p>
+              <p className="text-xs text-gray-400 mt-1">Saved to the salon library for everyone to use</p>
+            </>
+          )}
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={e => handleUpload(e.target.files[0])} />
+      </div>
+
+      {/* Grid */}
+      <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-6">
+        <h3 className="font-semibold text-gray-700 mb-4">Salon Media Library ({media.length} files)</h3>
+        {loading ? (
+          <p className="text-gray-400 text-sm">Loading...</p>
+        ) : media.length === 0 ? (
+          <p className="text-gray-400 text-sm">No files uploaded yet. Add some above!</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {media.map(item => (
+              <div key={item.id} className="relative group rounded-xl overflow-hidden border border-pink-100 bg-gray-50">
+                {item.mime_type.startsWith('image/') ? (
+                  <img src={item.url} alt={item.original_name} className="w-full h-32 object-cover" />
+                ) : (
+                  <video src={item.url} className="w-full h-32 object-cover" />
+                )}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                  {onSelect && (
+                    <button
+                      onClick={() => onSelect(item)}
+                      className="bg-[#E91E8C] text-white text-xs px-3 py-1.5 rounded-lg font-semibold"
+                    >
+                      Use for Post
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="bg-red-500 text-white text-xs px-3 py-1.5 rounded-lg font-semibold"
+                  >
+                    Delete
+                  </button>
+                </div>
+                <div className="p-2">
+                  <p className="text-xs text-gray-500 truncate">{item.original_name}</p>
+                  {item.uploaded_by && <p className="text-xs text-pink-400">{item.uploaded_by}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LibraryPicker({ onSelect, selected }) {
+  const [media, setMedia] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/media')
+      .then(r => r.json())
+      .then(data => { setMedia(data.media || []); setLoading(false) })
+  }, [])
+
+  if (loading) return <p className="text-gray-400 text-sm py-4">Loading library...</p>
+  if (media.length === 0) return (
+    <div className="border-2 border-dashed border-pink-100 rounded-xl p-6 text-center text-gray-400 text-sm">
+      No files in library yet. Upload some in the Media Library tab!
+    </div>
+  )
+
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-2">
+      {media.map(item => (
+        <div
+          key={item.id}
+          onClick={() => onSelect(item)}
+          className={`flex-shrink-0 relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
+            selected?.id === item.id ? 'border-[#E91E8C] shadow-md' : 'border-pink-100 hover:border-pink-300'
+          }`}
+          style={{ width: 100 }}
+        >
+          {item.mime_type.startsWith('image/') ? (
+            <img src={item.url} alt={item.original_name} className="w-full h-20 object-cover" />
+          ) : (
+            <video src={item.url} className="w-full h-20 object-cover" />
+          )}
+          {selected?.id === item.id && (
+            <div className="absolute inset-0 bg-[#E91E8C]/20 flex items-center justify-center">
+              <span className="text-[#E91E8C] text-xl font-bold">✓</span>
+            </div>
+          )}
+          <div className="p-1">
+            <p className="text-xs text-gray-400 truncate">{item.original_name}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Home() {
+  const [activeTab, setActiveTab] = useState('create')
   const [employeeName, setEmployeeName] = useState('')
   const [context, setContext] = useState('')
   const [goal, setGoal] = useState('booth_renters')
@@ -68,6 +225,8 @@ export default function Home() {
   const [postResults, setPostResults] = useState({})
   const [linkedinConnected, setLinkedinConnected] = useState(null)
   const [linkedinToast, setLinkedinToast] = useState(false)
+  const [fileSource, setFileSource] = useState('upload')
+  const [selectedLibraryItem, setSelectedLibraryItem] = useState(null)
 
   useEffect(() => {
     fetch('/api/linkedin/status')
@@ -137,6 +296,7 @@ export default function Home() {
       formData.append('goal', goal)
       formData.append('platforms', JSON.stringify(selectedPlatforms))
       if (file) formData.append('file', file)
+      if (selectedLibraryItem) formData.append('libraryImageUrl', selectedLibraryItem.url)
 
       const res = await fetch('/api/generate', { method: 'POST', body: formData })
       const data = await res.json()
@@ -164,143 +324,216 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-10">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Name */}
-          <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Your Name ✨</label>
-            <input
-              type="text"
-              value={employeeName}
-              onChange={e => setEmployeeName(e.target.value)}
-              placeholder="e.g. Jessica"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E91E8C] focus:border-transparent transition text-gray-800"
-            />
-          </div>
-
-          {/* Context */}
-          <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Tell us about this post 💬</label>
-            <textarea
-              value={context}
-              onChange={e => setContext(e.target.value)}
-              rows={4}
-              placeholder="e.g. Just finished this gorgeous balayage on a client — she came in wanting beachy waves and we DELIVERED. She cried happy tears! Used Redken shades..."
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E91E8C] focus:border-transparent transition text-gray-800 resize-none"
-            />
-          </div>
-
-          {/* Goal / Audience */}
-          <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-1">What's the goal of this post? 🎯</label>
-            <p className="text-xs text-gray-400 mb-4">This tells the AI who you're trying to reach so the message lands right.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {GOALS.map(g => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => setGoal(g.id)}
-                  className={`text-left px-4 py-3 rounded-xl border-2 transition-all ${
-                    goal === g.id
-                      ? 'border-[#E91E8C] bg-pink-50'
-                      : 'border-gray-100 hover:border-pink-200 bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-semibold text-sm text-gray-800 mb-0.5">
-                    <span>{g.emoji}</span> {g.label}
-                    {goal === g.id && <span className="ml-auto text-[#E91E8C] text-xs font-bold">✓ Selected</span>}
-                  </div>
-                  <p className="text-xs text-gray-400 leading-snug">{g.description}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* File Upload */}
-          <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-3">Upload Photo or Video 📸</label>
-            <div
-              onDrop={handleDrop}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                dragOver ? 'border-[#E91E8C] bg-pink-50' : 'border-pink-200 hover:border-[#E91E8C] hover:bg-pink-50'
+      {/* Tab Bar */}
+      <div className="flex border-b border-pink-100 bg-white">
+        <div className="max-w-4xl mx-auto px-4 w-full flex gap-1 pt-2">
+          {[
+            { id: 'create', label: '✨ Create Post' },
+            { id: 'library', label: '📁 Media Library' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-5 py-2.5 text-sm font-semibold rounded-t-xl transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-[#fdf4f9] text-[#E91E8C] border-b-2 border-[#E91E8C]'
+                  : 'text-gray-400 hover:text-gray-600'
               }`}
             >
-              {preview ? (
-                <div className="flex flex-col items-center gap-3">
-                  {preview.type.startsWith('image/') ? (
-                    <img src={preview.url} alt="Preview" className="max-h-48 rounded-lg object-cover shadow-md" />
-                  ) : (
-                    <video src={preview.url} className="max-h-48 rounded-lg shadow-md" controls />
-                  )}
-                  <p className="text-sm text-gray-500">Click to change file</p>
-                </div>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-10">
+        {activeTab === 'library' ? (
+          <MediaLibrary onSelect={(item) => { setSelectedLibraryItem(item); setFileSource('library'); setActiveTab('create') }} />
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Name */}
+            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Your Name ✨</label>
+              <input
+                type="text"
+                value={employeeName}
+                onChange={e => setEmployeeName(e.target.value)}
+                placeholder="e.g. Jessica"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E91E8C] focus:border-transparent transition text-gray-800"
+              />
+            </div>
+
+            {/* Context */}
+            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Tell us about this post 💬</label>
+              <textarea
+                value={context}
+                onChange={e => setContext(e.target.value)}
+                rows={4}
+                placeholder="e.g. Just finished this gorgeous balayage on a client — she came in wanting beachy waves and we DELIVERED. She cried happy tears! Used Redken shades..."
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E91E8C] focus:border-transparent transition text-gray-800 resize-none"
+              />
+            </div>
+
+            {/* Goal / Audience */}
+            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-1">What's the goal of this post? 🎯</label>
+              <p className="text-xs text-gray-400 mb-4">This tells the AI who you're trying to reach so the message lands right.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {GOALS.map(g => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => setGoal(g.id)}
+                    className={`text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                      goal === g.id
+                        ? 'border-[#E91E8C] bg-pink-50'
+                        : 'border-gray-100 hover:border-pink-200 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-semibold text-sm text-gray-800 mb-0.5">
+                      <span>{g.emoji}</span> {g.label}
+                      {goal === g.id && <span className="ml-auto text-[#E91E8C] text-xs font-bold">✓ Selected</span>}
+                    </div>
+                    <p className="text-xs text-gray-400 leading-snug">{g.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* File / Media */}
+            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">Photo or Video 📸</label>
+
+              {/* Toggle */}
+              <div className="flex gap-2 mb-4">
+                {[
+                  { id: 'upload', label: 'Upload New' },
+                  { id: 'library', label: 'Pick from Library' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => { setFileSource(opt.id); setSelectedLibraryItem(null); setFile(null); setPreview(null) }}
+                    className={`px-4 py-2 rounded-full text-sm font-medium border-2 transition-all ${
+                      fileSource === opt.id
+                        ? 'bg-[#E91E8C] text-white border-[#E91E8C]'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-pink-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {fileSource === 'upload' ? (
+                <>
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                    onDragLeave={() => setDragOver(false)}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                      dragOver ? 'border-[#E91E8C] bg-pink-50' : 'border-pink-200 hover:border-[#E91E8C] hover:bg-pink-50'
+                    }`}
+                  >
+                    {preview ? (
+                      <div className="flex flex-col items-center gap-3">
+                        {preview.type.startsWith('image/') ? (
+                          <img src={preview.url} alt="Preview" className="max-h-48 rounded-lg object-cover shadow-md" />
+                        ) : (
+                          <video src={preview.url} className="max-h-48 rounded-lg shadow-md" controls />
+                        )}
+                        <p className="text-sm text-gray-500">Click to change file</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-gray-400">
+                        <span className="text-4xl">📁</span>
+                        <p className="font-medium text-gray-600">Drag & drop or click to upload</p>
+                        <p className="text-sm">Photos or Videos (optional)</p>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={e => handleFile(e.target.files[0])}
+                  />
+                </>
               ) : (
-                <div className="flex flex-col items-center gap-2 text-gray-400">
-                  <span className="text-4xl">📁</span>
-                  <p className="font-medium text-gray-600">Drag & drop or click to upload</p>
-                  <p className="text-sm">Photos or Videos (optional)</p>
+                <div>
+                  <LibraryPicker
+                    onSelect={(item) => {
+                      setSelectedLibraryItem(item)
+                      setFile(null)
+                      setPreview({ url: item.url, type: item.mime_type })
+                    }}
+                    selected={selectedLibraryItem}
+                  />
+                  {selectedLibraryItem && preview && (
+                    <div className="mt-4 flex flex-col items-center gap-2">
+                      {preview.type.startsWith('image/') ? (
+                        <img src={preview.url} alt="Selected" className="max-h-48 rounded-lg object-cover shadow-md" />
+                      ) : (
+                        <video src={preview.url} className="max-h-48 rounded-lg shadow-md" controls />
+                      )}
+                      <p className="text-xs text-[#E91E8C] font-medium">✓ {selectedLibraryItem.original_name} selected</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*"
-              className="hidden"
-              onChange={e => handleFile(e.target.files[0])}
-            />
-          </div>
 
-          {/* Platforms */}
-          <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-3">Generate posts for 🌐</label>
-            <div className="flex flex-wrap gap-3">
-              {PLATFORMS.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => togglePlatform(p.id)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-medium text-sm transition-all border-2 ${
-                    selectedPlatforms.includes(p.id)
-                      ? 'bg-[#E91E8C] text-white border-[#E91E8C] shadow-md'
-                      : 'bg-white text-gray-500 border-gray-200 hover:border-[#E91E8C]'
-                  }`}
-                >
-                  <span>{p.emoji}</span> {p.label}
-                </button>
-              ))}
+            {/* Platforms */}
+            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">Generate posts for 🌐</label>
+              <div className="flex flex-wrap gap-3">
+                {PLATFORMS.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => togglePlatform(p.id)}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-medium text-sm transition-all border-2 ${
+                      selectedPlatforms.includes(p.id)
+                        ? 'bg-[#E91E8C] text-white border-[#E91E8C] shadow-md'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#E91E8C]'
+                    }`}
+                  >
+                    <span>{p.emoji}</span> {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm">
-              ⚠️ {error}
-            </div>
-          )}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm">
+                ⚠️ {error}
+              </div>
+            )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-4 rounded-2xl font-bold text-lg text-white shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{ background: loading ? '#ccc' : 'linear-gradient(135deg, #E91E8C, #C9A84C)' }}
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-3">
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12 0 12 12h4a8 8 0 01-8 8" />
-                </svg>
-                Crafting your posts...
-              </span>
-            ) : '✨ Generate Posts'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 rounded-2xl font-bold text-lg text-white shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ background: loading ? '#ccc' : 'linear-gradient(135deg, #E91E8C, #C9A84C)' }}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-3">
+                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12 0 12 12h4a8 8 0 01-8 8" />
+                  </svg>
+                  Crafting your posts...
+                </span>
+              ) : '✨ Generate Posts'}
+            </button>
+          </form>
+        )}
 
         {/* Results */}
-        {posts && (
+        {posts && activeTab === 'create' && (
           <div className="mt-10 space-y-5">
             {linkedinToast && (
               <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm font-medium">
@@ -385,7 +618,7 @@ export default function Home() {
               )
             })}
             <button
-              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters'); setPosting({}); setPostResults({}) }}
+              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters'); setPosting({}); setPostResults({}); setSelectedLibraryItem(null); setFileSource('upload') }}
               className="w-full py-3 rounded-2xl border-2 border-pink-200 text-[#E91E8C] font-semibold hover:bg-pink-50 transition-colors"
             >
               Create Another Post
