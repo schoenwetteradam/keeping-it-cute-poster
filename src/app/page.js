@@ -486,6 +486,7 @@ export default function Home() {
           {[
             { id: 'create', label: '✨ Create Post' },
             { id: 'library', label: '📁 Media Library' },
+            { id: 'insights', label: '📊 Insights' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -505,6 +506,8 @@ export default function Home() {
       <div className="max-w-4xl mx-auto px-4 py-10">
         {activeTab === 'library' ? (
           <MediaLibrary onSelect={(item) => { setSelectedLibraryItem(item); setFileSource('library'); setActiveTab('create') }} />
+        ) : activeTab === 'insights' ? (
+          <InsightsTab />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name */}
@@ -769,12 +772,23 @@ export default function Home() {
                   )}
                   <div className="px-6 py-5">
                     <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-sm">{posts[p.id]}</pre>
+                    {postIds[p.id] && (
+                      <RatingCard postId={postIds[p.id]} platform={p.id} employeeName={employeeName} />
+                    )}
                   </div>
                 </div>
               )
             })}
+            {postResults.facebook?.success && (
+              <button
+                onClick={syncFacebookStats}
+                className="w-full py-2.5 rounded-xl border-2 border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50 transition-colors"
+              >
+                📊 Sync Facebook Engagement Stats
+              </button>
+            )}
             <button
-              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters'); setPosting({}); setPostResults({}); setSelectedLibraryItem(null); setFileSource('upload') }}
+              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters'); setPosting({}); setPostResults({}); setSelectedLibraryItem(null); setFileSource('upload'); setPostIds({}) }}
               className="w-full py-3 rounded-2xl border-2 border-pink-200 text-[#E91E8C] font-semibold hover:bg-pink-50 transition-colors"
             >
               Create Another Post
