@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
+import db from '@/lib/db'
+import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(request) {
   try {
@@ -95,6 +97,23 @@ export async function POST(request) {
     const goalInfo = goalInstructions[goal] || goalInstructions.showcase
     const platformsToGenerate = platforms.filter(p => ['facebook', 'instagram', 'linkedin'].includes(p))
 
+    // Fetch top-performing examples per platform for this goal
+    const topExamplesQuery = db.prepare(`
+      SELECT gp.post_text, gp.likes, gp.comments, gp.shares,
+             AVG(pr.rating) as avg_rating, gp.platform, gp.goal
+      FROM generated_posts gp
+      LEFT JOIN post_ratings pr ON pr.post_id = gp.id
+      WHERE gp.platform = ? AND gp.goal = ?
+      GROUP BY gp.id
+      HAVING avg_rating >= 4 OR gp.likes >= 20
+      ORDER BY avg_rating DESC, gp.likes DESC
+      LIMIT 3
+    `)
+    const topExamplesByPlatform = {}
+    for (const platform of platformsToGenerate) {
+      topExamplesByPlatform[platform] = topExamplesQuery.all(platform, goal)
+    }
+
     const prompt = `You are a social media copywriter for ${employeeName}, a stylist at "Keeping It Cute Salon & Spa".
 
 ## Your Goal
@@ -114,7 +133,13 @@ Post context / notes: ${context || 'No additional context — use what you know 
 ${(file && file.type && file.type.startsWith('image/')) || libraryImageUrl ? 'An image was provided — reference what you see in it naturally within the post.' : ''}
 
 ## Platform Instructions
-${platformsToGenerate.map(p => `### ${p}\n${platformDescriptions[p]}`).join('\n\n')}
+${platformsToGenerate.map(p => {
+  const examples = topExamplesByPlatform[p] || []
+  const examplesBlock = examples.length > 0
+    ? `\n### Examples of posts that performed well for this salon on ${p}\nStudy these high-performing posts and match their tone, energy, and style — they resonated with this salon's specific audience:\n\n${examples.map((ex, i) => `Example ${i + 1} (${ex.avg_rating ? `rated ${Number(ex.avg_rating).toFixed(1)}/5` : ''}${ex.likes ? ` · ${ex.likes} likes` : ''}${ex.comments ? ` · ${ex.comments} comments` : ''}):\n"${ex.post_text}"`).join('\n\n')}`
+    : '\n(No high-performing examples yet — write in an authentic, personal salon voice)'
+  return `### ${p}\n${platformDescriptions[p]}${examplesBlock}`
+}).join('\n\n')}
 
 For Instagram, use these hashtags as a starting point but adapt them to fit the content:
 ${goalInfo.instagramHashtags}
@@ -155,7 +180,21 @@ Only include keys for the requested platforms: ${platformsToGenerate.join(', ')}
       }
     }
 
-    return NextResponse.json({ posts })
+    // Save all generated posts to the DB
+    const insert = db.prepare(`
+      INSERT INTO generated_posts (id, employee_name, platform, goal, post_text, context)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    const postIds = {}
+    for (const platform of platformsToGenerate) {
+      if (posts[platform]) {
+        const id = uuidv4()
+        insert.run(id, employeeName || '', platform, goal, posts[platform], context || '')
+        postIds[platform] = id
+      }
+    }
+
+    return NextResponse.json({ posts, postIds })
   } catch (error) {
     console.error('Generation error:', error)
     return NextResponse.json(

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
+import db from '@/lib/db'
 
 export async function POST(request) {
   try {
-    const { message } = await request.json()
+    const { message, postId } = await request.json()
 
     const pageId = process.env.FACEBOOK_PAGE_ID
     const accessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN
@@ -31,10 +32,21 @@ export async function POST(request) {
       return NextResponse.json({ error: errMsg }, { status: res.status || 500 })
     }
 
-    const postId = data.id
-    const url = `https://www.facebook.com/${postId.replace('_', '/posts/')}`
+    const fbPostId = data.id
+    const url = `https://www.facebook.com/${fbPostId.replace('_', '/posts/')}`
 
-    return NextResponse.json({ success: true, postId, url })
+    // Update DB record if we have a postId
+    if (postId) {
+      try {
+        db.prepare(
+          "UPDATE generated_posts SET posted = 1, facebook_post_id = ? WHERE id = ?"
+        ).run(fbPostId, postId)
+      } catch (e) {
+        console.error('Failed to update generated_posts:', e)
+      }
+    }
+
+    return NextResponse.json({ success: true, postId: fbPostId, url })
   } catch (error) {
     console.error('Facebook post error:', error)
     return NextResponse.json({ error: error.message || 'Failed to post to Facebook' }, { status: 500 })

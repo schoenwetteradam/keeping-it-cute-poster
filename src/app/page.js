@@ -35,6 +35,155 @@ const GOALS = [
   },
 ]
 
+function StarRating({ value, onChange }) {
+  const [hovered, setHovered] = useState(0)
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map(star => (
+        <button
+          key={star}
+          type="button"
+          onMouseEnter={() => setHovered(star)}
+          onMouseLeave={() => setHovered(0)}
+          onClick={() => onChange(star)}
+          className="text-xl transition-transform hover:scale-110"
+        >
+          <span className={(hovered || value) >= star ? 'text-yellow-400' : 'text-gray-200'}>★</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function RatingCard({ postId, platform, employeeName }) {
+  const [rating, setRating] = useState(0)
+  const [notes, setNotes] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async () => {
+    if (!rating) return
+    setSubmitting(true)
+    await fetch(`/api/posts/${postId}/rate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating, notes, ratedBy: employeeName }),
+    })
+    setSubmitted(true)
+    setSubmitting(false)
+  }
+
+  if (submitted) return (
+    <div className="mt-3 pt-3 border-t border-pink-50 text-sm text-green-600 font-medium">
+      ✓ Thanks for the feedback! This helps the AI improve.
+    </div>
+  )
+
+  return (
+    <div className="mt-3 pt-3 border-t border-pink-50">
+      <p className="text-xs font-semibold text-gray-500 mb-2">How was this post? (helps the AI learn)</p>
+      <StarRating value={rating} onChange={setRating} />
+      {rating > 0 && (
+        <div className="mt-2 space-y-2">
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Optional note (e.g. 'too formal', 'loved the energy')"
+            rows={2}
+            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#E91E8C] resize-none"
+          />
+          <button
+            onClick={submit}
+            disabled={submitting}
+            className="text-xs bg-[#E91E8C] text-white px-4 py-1.5 rounded-lg font-semibold disabled:opacity-50"
+          >
+            {submitting ? 'Saving...' : 'Submit Rating'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InsightsTab() {
+  const [posts, setPosts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
+
+  const load = async () => {
+    const res = await fetch('/api/posts?limit=50')
+    const data = await res.json()
+    setPosts(data.posts || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const syncAll = async () => {
+    setSyncing(true)
+    const res = await fetch('/api/posts/sync-all', { method: 'POST' })
+    const data = await res.json()
+    setSyncMsg(`Synced ${data.synced} posts`)
+    await load()
+    setSyncing(false)
+    setTimeout(() => setSyncMsg(''), 4000)
+  }
+
+  const platformEmoji = { facebook: '📘', instagram: '📸', linkedin: '💼' }
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-800">Post Performance</h3>
+          <button onClick={syncAll} disabled={syncing} className="text-sm bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold disabled:opacity-50">
+            {syncing ? 'Syncing...' : '🔄 Sync Facebook Stats'}
+          </button>
+        </div>
+        {syncMsg && <p className="text-green-600 text-sm mb-3">{syncMsg}</p>}
+        {loading ? <p className="text-gray-400 text-sm">Loading...</p> : posts.length === 0 ? (
+          <p className="text-gray-400 text-sm">No posts yet — generate and rate some posts to see insights here.</p>
+        ) : (
+          <div className="space-y-3">
+            {posts.map(post => (
+              <div key={post.id} className="border border-pink-50 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span>{platformEmoji[post.platform] || '📝'}</span>
+                      <span className="text-xs font-semibold text-gray-500 uppercase">{post.platform}</span>
+                      <span className="text-xs text-gray-400">· {post.goal?.replace('_', ' ')}</span>
+                      {post.employee_name && <span className="text-xs text-pink-400">by {post.employee_name}</span>}
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed">
+                      {post.post_text?.slice(0, 120)}{post.post_text?.length > 120 ? '...' : ''}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {post.avg_rating > 0 && (
+                      <div className="text-yellow-400 text-sm font-bold">{'★'.repeat(Math.round(post.avg_rating))}{'☆'.repeat(5 - Math.round(post.avg_rating))}</div>
+                    )}
+                    {post.avg_rating > 0 && <p className="text-xs text-gray-400">{Number(post.avg_rating).toFixed(1)}/5</p>}
+                  </div>
+                </div>
+                {(post.likes > 0 || post.comments > 0 || post.shares > 0 || post.reach > 0) && (
+                  <div className="mt-2 flex gap-4 text-xs text-gray-500">
+                    {post.likes > 0 && <span>👍 {post.likes}</span>}
+                    {post.comments > 0 && <span>💬 {post.comments}</span>}
+                    {post.shares > 0 && <span>🔁 {post.shares}</span>}
+                    {post.reach > 0 && <span>👁 {post.reach} reach</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
@@ -221,6 +370,7 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef(null)
+  const [postIds, setPostIds] = useState({})
   const [posting, setPosting] = useState({})
   const [postResults, setPostResults] = useState({})
   const [linkedinConnected, setLinkedinConnected] = useState(null)
@@ -242,13 +392,18 @@ export default function Home() {
     }
   }, [])
 
+  const syncFacebookStats = async () => {
+    await fetch('/api/posts/sync-all', { method: 'POST' })
+    alert('Facebook stats synced!')
+  }
+
   const postToPlatform = async (platformId, text) => {
     setPosting(prev => ({ ...prev, [platformId]: 'loading' }))
     try {
       const res = await fetch(`/api/post/${platformId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, postId: postIds[platformId] }),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error)
@@ -303,6 +458,7 @@ export default function Home() {
 
       if (!res.ok) throw new Error(data.error || 'Generation failed')
       setPosts(data.posts)
+      setPostIds(data.postIds || {})
     } catch (err) {
       setError(err.message)
     } finally {
