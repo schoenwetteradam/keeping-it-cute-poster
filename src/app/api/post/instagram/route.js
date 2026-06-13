@@ -1,84 +1,82 @@
 import { NextResponse } from 'next/server'
+import db from '@/lib/db'
+import { cleanText, isPublicHttpUrl } from '@/lib/validation'
+
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v19.0'
 
 export async function POST(request) {
   try {
-    const { message, imageUrl } = await request.json()
-
+    const { message, imageUrl, postId: generatedPostId } = await request.json()
     const businessAccountId = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID
     const accessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN
 
-    if (!businessAccountId) {
+    if (!businessAccountId || !accessToken) {
       return NextResponse.json(
-        { error: 'Instagram not configured — add INSTAGRAM_BUSINESS_ACCOUNT_ID to .env.local' },
+        { error: 'Instagram is not configured. Add the account ID and access token to .env.local.' },
+        { status: 400 }
+      )
+    }
+    if (!cleanText(message, 2200)) {
+      return NextResponse.json({ error: 'Caption is required.' }, { status: 400 })
+    }
+    if (!isPublicHttpUrl(imageUrl)) {
+      return NextResponse.json(
+        { error: 'Instagram requires an image hosted at a public HTTPS URL. Localhost images cannot be published.' },
         { status: 400 }
       )
     }
 
-    if (!imageUrl) {
-      return NextResponse.json(
-        { error: 'Instagram requires a publicly accessible image URL. Provide imageUrl in the request body.' },
-        { status: 400 }
-      )
-    }
-
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'Instagram not configured — add FACEBOOK_PAGE_ACCESS_TOKEN to .env.local' },
-        { status: 400 }
-      )
-    }
-
-    // Step 1: Create media container
     const containerRes = await fetch(
-      `https://graph.facebook.com/v19.0/${businessAccountId}/media`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/${businessAccountId}/media`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image_url: imageUrl,
-          caption: message,
+          caption: cleanText(message, 2200),
           access_token: accessToken,
         }),
       }
     )
-
     const containerData = await containerRes.json()
-
     if (!containerRes.ok || containerData.error) {
-      const errMsg = containerData.error?.message || 'Failed to create Instagram media container'
-      return NextResponse.json({ error: errMsg }, { status: containerRes.status || 500 })
+      return NextResponse.json(
+        { error: containerData.error?.message || 'Failed to create the Instagram media container.' },
+        { status: containerRes.status || 500 }
+      )
     }
 
-    const creationId = containerData.id
-
-    // Step 2: Publish the container
     const publishRes = await fetch(
-      `https://graph.facebook.com/v19.0/${businessAccountId}/media_publish`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/${businessAccountId}/media_publish`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          creation_id: creationId,
+          creation_id: containerData.id,
           access_token: accessToken,
         }),
       }
     )
-
     const publishData = await publishRes.json()
-
     if (!publishRes.ok || publishData.error) {
-      const errMsg = publishData.error?.message || 'Failed to publish Instagram post'
-      return NextResponse.json({ error: errMsg }, { status: publishRes.status || 500 })
+      return NextResponse.json(
+        { error: publishData.error?.message || 'Failed to publish the Instagram post.' },
+        { status: publishRes.status || 500 }
+      )
     }
 
-    const postId = publishData.id
+    if (generatedPostId) {
+      db.prepare(
+        "UPDATE generated_posts SET posted = 1, external_post_id = ?, posted_at = datetime('now') WHERE id = ?"
+      ).run(publishData.id, generatedPostId)
+    }
     return NextResponse.json({
       success: true,
-      postId,
-      url: `https://www.instagram.com/p/${postId}/`,
+      postId: publishData.id,
+      url: 'https://www.instagram.com/',
     })
   } catch (error) {
     console.error('Instagram post error:', error)
-    return NextResponse.json({ error: error.message || 'Failed to post to Instagram' }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Failed to post to Instagram.' }, { status: 500 })
   }
 }

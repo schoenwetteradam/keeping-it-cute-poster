@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import db from '@/lib/db'
 
 export async function POST(request) {
   try {
-    const { message } = await request.json()
+    const { message, postId: generatedPostId } = await request.json()
 
     const tokenPath = join(process.cwd(), '.linkedin-token.json')
 
@@ -73,6 +74,11 @@ export async function POST(request) {
     }
 
     const postId = postData.id || postData['id']
+    if (generatedPostId) {
+      db.prepare(
+        "UPDATE generated_posts SET posted = 1, external_post_id = ?, posted_at = datetime('now') WHERE id = ?"
+      ).run(postId || '', generatedPostId)
+    }
     return NextResponse.json({ success: true, postId, url: 'https://www.linkedin.com/feed/' })
   } catch (error) {
     console.error('LinkedIn post error:', error)

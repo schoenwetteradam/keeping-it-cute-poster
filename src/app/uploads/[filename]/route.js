@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 
 export async function GET(request, { params }) {
-  const { filename } = params
+  const filename = path.basename(params.filename)
   const filepath = path.join(process.cwd(), 'uploads', filename)
 
   if (!fs.existsSync(filepath)) {

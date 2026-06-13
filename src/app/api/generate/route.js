@@ -1,204 +1,235 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
+import { cleanText, validateUpload } from '@/lib/validation'
 import { v4 as uuidv4 } from 'uuid'
+import path from 'path'
+import fs from 'fs'
+
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads')
+const SUPPORTED_PLATFORMS = new Set(['facebook', 'instagram', 'linkedin'])
+
+const GOALS = {
+  booth_renters: {
+    summary: 'Attract licensed beauty professionals who may want to rent a booth.',
+    guidance: 'Speak peer-to-peer about independence, community, support, professionalism, location, and business growth. Use a natural invitation to ask about availability.',
+  },
+  new_clients: {
+    summary: 'Attract new salon clients.',
+    guidance: 'Make the experience feel welcoming and specific. Describe the result and include a clear, natural booking action.',
+  },
+  showcase: {
+    summary: 'Showcase excellent work without forcing a sales pitch.',
+    guidance: 'Describe the transformation, technique, creative decisions, and client story. Let genuine pride in the craft carry the post.',
+  },
+  community: {
+    summary: 'Build a stronger local and online community.',
+    guidance: 'Share something useful, celebratory, personal, or discussion-worthy. Prioritize connection over conversion.',
+  },
+}
+
+const PLATFORM_GUIDANCE = {
+  facebook: 'Conversational and warm. Use a short story, readable paragraphs, restrained emojis, and a natural call to action. Aim for 120-250 words.',
+  instagram: 'Visual and energetic. Lead with a hook, use readable line breaks, and finish with 8-15 highly relevant hashtags rather than a generic block. Aim for 90-180 caption words.',
+  linkedin: 'Professional but human. Emphasize craft, entrepreneurship, service, or professional growth. Use no more than two emojis and finish with 3-5 focused hashtags. Aim for 90-160 words.',
+}
+
+function readBrandSettings() {
+  const defaults = {
+    salonName: 'Keeping It Cute Salon & Spa',
+    voice: 'Warm, confident, welcoming, playful, specific, and never corporate.',
+    services: 'Hair, beauty, salon, and spa services.',
+    location: '',
+    bookingUrl: '',
+    signaturePhrases: '',
+    avoidPhrases: 'I am passionate about; I take pride in; elevate your look',
+    boothBenefits: 'Supportive culture, flexible schedules, professional environment, and room to grow.',
+  }
+  const rows = db.prepare('SELECT key, value FROM brand_settings').all()
+  for (const row of rows) defaults[row.key] = row.value
+  return defaults
+}
+
+function saveUploadedMedia(file, bytes, employeeName) {
+  const extensions = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'video/mp4': '.mp4',
+    'video/quicktime': '.mov',
+  }
+  const id = uuidv4()
+  const filename = `${id}${extensions[file.type]}`
+  fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(bytes))
+  db.prepare(`
+    INSERT INTO media (id, filename, original_name, mime_type, size, uploaded_by)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, filename, file.name, file.type, file.size, employeeName)
+  return `/uploads/${filename}`
+}
+
+function addImageFromLibrary(content, libraryImageUrl) {
+  if (!libraryImageUrl) return
+  const filename = path.basename(libraryImageUrl)
+  const row = db.prepare('SELECT mime_type FROM media WHERE filename = ?').get(filename)
+  if (!row?.mime_type?.startsWith('image/')) return
+  const filepath = path.join(UPLOADS_DIR, filename)
+  if (!fs.existsSync(filepath)) return
+  content.push({
+    type: 'image',
+    source: {
+      type: 'base64',
+      media_type: row.mime_type,
+      data: fs.readFileSync(filepath).toString('base64'),
+    },
+  })
+}
 
 export async function POST(request) {
   try {
     const formData = await request.formData()
-    const employeeName = formData.get('employeeName')
-    const context = formData.get('context')
-    const goal = formData.get('goal') || 'showcase'
-    const platforms = JSON.parse(formData.get('platforms'))
-    const file = formData.get('file') // may be null
-    const libraryImageUrl = formData.get('libraryImageUrl')
+    const employeeName = cleanText(formData.get('employeeName'), 100)
+    const context = cleanText(formData.get('context'), 4000)
+    const goal = GOALS[formData.get('goal')] ? formData.get('goal') : 'showcase'
+    const platforms = JSON.parse(formData.get('platforms') || '[]')
+      .filter(platform => SUPPORTED_PLATFORMS.has(platform))
+    const file = formData.get('file')
+    const libraryImageUrl = cleanText(formData.get('libraryImageUrl'), 500)
 
-    const client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    })
+    if (!employeeName) {
+      return NextResponse.json({ error: 'Please enter your name.' }, { status: 400 })
+    }
+    if (platforms.length === 0) {
+      return NextResponse.json({ error: 'Select at least one platform.' }, { status: 400 })
+    }
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured.' }, { status: 503 })
+    }
 
-    // Build the message content
     const content = []
+    let mediaUrl = libraryImageUrl
 
-    // If there's an image, include it
     if (file && file.size > 0) {
+      const validationError = validateUpload(file)
+      if (validationError) {
+        return NextResponse.json({ error: validationError }, { status: 400 })
+      }
       const bytes = await file.arrayBuffer()
-      const base64 = Buffer.from(bytes).toString('base64')
-      const mediaType = file.type
-
-      // Only include image types (videos can't be sent to Claude vision)
-      if (mediaType.startsWith('image/')) {
+      mediaUrl = saveUploadedMedia(file, bytes, employeeName)
+      if (file.type.startsWith('image/')) {
         content.push({
           type: 'image',
           source: {
             type: 'base64',
-            media_type: mediaType,
-            data: base64,
+            media_type: file.type,
+            data: Buffer.from(bytes).toString('base64'),
           },
         })
       }
+    } else {
+      addImageFromLibrary(content, libraryImageUrl)
     }
 
-    // If no direct file upload but library URL provided, fetch and encode it
-    if ((!file || file.size === 0) && libraryImageUrl) {
-      try {
-        const imgRes = await fetch(`http://localhost:3000${libraryImageUrl}`)
-        const imgBuffer = await imgRes.arrayBuffer()
-        const base64 = Buffer.from(imgBuffer).toString('base64')
-        const mimeType = imgRes.headers.get('content-type') || 'image/jpeg'
-        if (mimeType.startsWith('image/')) {
-          content.push({
-            type: 'image',
-            source: { type: 'base64', media_type: mimeType, data: base64 },
-          })
-        }
-      } catch (e) {
-        // silently skip if image fetch fails
-      }
-    }
-
-    const goalInstructions = {
-      booth_renters: {
-        summary: 'attract booth renters — licensed stylists and beauty professionals who are looking for a chair or booth to rent',
-        audience: 'other hair stylists, cosmetologists, estheticians, nail techs, and beauty pros who are independent or thinking about going independent',
-        angle: `Speak stylist-to-stylist. Highlight what makes renting a booth at Keeping It Cute Salon & Spa amazing: the community, the vibe, the freedom of being your own boss, the support, the clientele in the area. Make them WANT to be part of this family. Mention things like flexible schedules, great location, supportive team culture, professional environment. Don't make it sound like an ad — make it sound like ${employeeName} genuinely loves working here and wants to share that with fellow beauty pros. A subtle call to action like "DM me if you're looking for a booth" or "reach out if you're ready to level up" works great.`,
-        linkedinAngle: 'Position this as a professional opportunity. Speak to the business side: building your own clientele, setting your own rates, growing your brand under a reputable salon name. Stylists on LinkedIn are often business-minded — appeal to entrepreneurship and professional growth.',
-        instagramHashtags: '#boothrental #salonlife #hairstylist #beautypro #independentstylist #salonbooth #cosmetologist #hairboss #keepingitcute #salonculture #boothrentals #hairsalon #beautyentrepreneur #stylistlife #hairstylistlife #licensedcosmetologist #salonowner #beautylife #hairpro #stylists',
-      },
-      new_clients: {
-        summary: 'attract new salon clients — people looking for a great stylist or a new salon home',
-        audience: 'potential clients: people who want a fresh look, are new to the area, are unhappy with their current stylist, or just want to treat themselves',
-        angle: `Make them feel welcome and excited to book. Highlight the transformation, the experience, the vibe of the salon. Use warm, inviting language. Include a clear but natural call to action — "link in bio to book", "DM me to get on my books", "comment below if you want this look". Make the reader feel like booking with ${employeeName} would be a treat, not a chore.`,
-        linkedinAngle: 'Keep it professional but warm — speak to the craft and quality of service. Good for reaching professionals who take their appearance seriously.',
-        instagramHashtags: '#hairtransformation #newhair #salonlife #hairgoals #balayage #highlights #haircolor #brazilianblowout #keratin #keepingitcutesalon #hairsalon #booknow #hairinspo #hairofinstagram #freshcut #naturalhair #protectivestyles #healthyhair #haircare #salonvibes',
-      },
-      showcase: {
-        summary: 'showcase beautiful work — a transformation, a new style, or a service — without a specific sales pitch',
-        audience: 'current followers, fellow stylists, and anyone who appreciates great hair and beauty work',
-        angle: `Let the work speak for itself. Be descriptive and passionate about the technique, the colors, the result. Tell the story behind it if there is one. Express genuine pride and joy in the craft. No hard sell — just authentic sharing of something ${employeeName} is proud of.`,
-        linkedinAngle: 'Frame it as craft and skill — the artistry behind the work, what techniques were used, why this kind of work takes training and talent.',
-        instagramHashtags: '#hairoftheday #hairgoals #hairtransformation #salonlife #keepingitcute #hairinspo #beautysalon #hairstylist #haircolor #hairart #fresh #hairofinstagram #transformationtuesday #hairtok #salonvibes #beautycommunity #hairporn #glam #hairlove #stylistlife',
-      },
-      community: {
-        summary: 'build community — engage followers, share tips, celebrate the salon culture, or connect authentically',
-        audience: 'existing followers, the local community, fellow beauty lovers, and anyone who follows the salon or stylist',
-        angle: `Be real, warm, and human. Ask questions, share something personal about the journey, celebrate a milestone, give a tip, or hype up the team. Make followers feel like they're part of something. Community posts are about connection, not conversion — though genuine community always leads to more business over time.`,
-        linkedinAngle: 'Share something meaningful about the industry, the business of beauty, or the community behind the salon. Thought leadership or authentic reflection works well here.',
-        instagramHashtags: '#salonlife #beautycom #keepingitcute #hairsalon #salonculture #beautylife #haircommunity #salonteam #smallbusiness #localbusiness #beautytips #haircare #stylistlife #salonvibes #beautylover #hairenthusiast #salongoals #girlboss #beautybusiness #hairgang',
-      },
-    }
-
-    const platformDescriptions = {
-      facebook: 'Facebook — conversational, warm, up to 350 words, use emojis sparingly, personal storytelling tone, community-focused. End with a natural call to action suited to the goal.',
-      instagram: 'Instagram — visually descriptive, energetic, 120-200 words of caption, then a line break, then a block of 20 relevant hashtags on their own lines. Heavy use of emojis throughout the caption.',
-      linkedin: 'LinkedIn — professional yet personable, 100-180 words, 1-2 emojis max, focus on craft/skill/professionalism/entrepreneurship depending on goal. End with 3-5 targeted hashtags only.',
-    }
-
-    const goalInfo = goalInstructions[goal] || goalInstructions.showcase
-    const platformsToGenerate = platforms.filter(p => ['facebook', 'instagram', 'linkedin'].includes(p))
-
-    // Fetch top-performing examples per platform for this goal
-    const topExamplesQuery = db.prepare(`
-      SELECT gp.post_text, gp.likes, gp.comments, gp.shares,
-             AVG(pr.rating) as avg_rating, gp.platform, gp.goal
+    const brand = readBrandSettings()
+    const goalInfo = GOALS[goal]
+    const exampleQuery = db.prepare(`
+      SELECT gp.post_text, gp.variant, gp.likes, gp.comments, gp.shares,
+             AVG(pr.rating) AS avg_rating
       FROM generated_posts gp
       LEFT JOIN post_ratings pr ON pr.post_id = gp.id
       WHERE gp.platform = ? AND gp.goal = ?
       GROUP BY gp.id
-      HAVING avg_rating >= 4 OR gp.likes >= 20
-      ORDER BY avg_rating DESC, gp.likes DESC
+      HAVING avg_rating >= 4 OR (gp.likes + gp.comments * 2 + gp.shares * 3) >= 15
+      ORDER BY avg_rating DESC, (gp.likes + gp.comments * 2 + gp.shares * 3) DESC
       LIMIT 3
     `)
-    const topExamplesByPlatform = {}
-    for (const platform of platformsToGenerate) {
-      topExamplesByPlatform[platform] = topExamplesQuery.all(platform, goal)
-    }
 
-    const prompt = `You are a social media copywriter for ${employeeName}, a stylist at "Keeping It Cute Salon & Spa".
+    const platformSections = platforms.map(platform => {
+      const examples = exampleQuery.all(platform, goal)
+      const examplesText = examples.length
+        ? examples.map((example, index) => (
+          `Example ${index + 1} (${example.variant || 'balanced'}, rating ${Number(example.avg_rating || 0).toFixed(1)}):\n${example.post_text}`
+        )).join('\n\n')
+        : 'No proven examples yet. Establish a natural, memorable salon voice.'
+      return `### ${platform}
+${PLATFORM_GUIDANCE[platform]}
 
-## Your Goal
-Write posts designed to: ${goalInfo.summary}
+Past examples that earned strong ratings or engagement:
+${examplesText}`
+    }).join('\n\n')
 
-## Target Audience
-${goalInfo.audience}
+    const prompt = `You are the social media strategist for ${brand.salonName}.
 
-## How to write these posts
-${goalInfo.angle}
+Brand voice: ${brand.voice}
+Services: ${brand.services}
+Location: ${brand.location || 'Not specified'}
+Booking URL: ${brand.bookingUrl || 'Not specified'}
+Signature phrases: ${brand.signaturePhrases || 'None specified'}
+Never use these phrases: ${brand.avoidPhrases || 'Generic corporate filler'}
+Booth benefits: ${brand.boothBenefits}
 
-For LinkedIn specifically: ${goalInfo.linkedinAngle}
+Employee: ${employeeName}
+Goal: ${goalInfo.summary}
+Goal guidance: ${goalInfo.guidance}
+Post notes: ${context || 'No extra notes were provided. Keep claims conservative and do not invent details.'}
+${mediaUrl ? 'Media is attached. Refer only to details that are clearly visible or included in the notes.' : 'No media is attached.'}
 
-## Employee Context
-Name: ${employeeName}
-Post context / notes: ${context || 'No additional context — use what you know about the goal to craft the post.'}
-${(file && file.type && file.type.startsWith('image/')) || libraryImageUrl ? 'An image was provided — reference what you see in it naturally within the post.' : ''}
+${platformSections}
 
-## Platform Instructions
-${platformsToGenerate.map(p => {
-  const examples = topExamplesByPlatform[p] || []
-  const examplesBlock = examples.length > 0
-    ? `\n### Examples of posts that performed well for this salon on ${p}\nStudy these high-performing posts and match their tone, energy, and style — they resonated with this salon's specific audience:\n\n${examples.map((ex, i) => `Example ${i + 1} (${ex.avg_rating ? `rated ${Number(ex.avg_rating).toFixed(1)}/5` : ''}${ex.likes ? ` · ${ex.likes} likes` : ''}${ex.comments ? ` · ${ex.comments} comments` : ''}):\n"${ex.post_text}"`).join('\n\n')}`
-    : '\n(No high-performing examples yet — write in an authentic, personal salon voice)'
-  return `### ${p}\n${platformDescriptions[p]}${examplesBlock}`
-}).join('\n\n')}
+For every requested platform, write three genuinely different options:
+- balanced: polished, warm, and broadly useful
+- personal: conversational, story-led, and intimate
+- bold: a strong truthful hook with more energy
 
-For Instagram, use these hashtags as a starting point but adapt them to fit the content:
-${goalInfo.instagramHashtags}
+Rules:
+- Write in first person as ${employeeName}.
+- Never invent prices, availability, credentials, results, or client quotes.
+- Avoid generic marketing filler.
+- Keep every option ready to publish.
+- Return only raw valid JSON.
 
-## Rules
-- Write in first person as ${employeeName} — authentic, NOT corporate
-- Match the tone to the goal and platform
-- Make it feel like a real person wrote this, not a marketing team
-- Do NOT use generic filler phrases like "I am passionate about" or "I take pride in"
-- Be specific, vivid, and real
-
-Return ONLY a valid JSON object with no markdown, no code blocks — raw JSON:
-{"facebook": "...", "instagram": "...", "linkedin": "..."}
-
-Only include keys for the requested platforms: ${platformsToGenerate.join(', ')}`
-
+Required JSON shape:
+${JSON.stringify(Object.fromEntries(platforms.map(platform => [
+  platform,
+  { balanced: '...', personal: '...', bold: '...' },
+])))}
+`
     content.push({ type: 'text', text: prompt })
 
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const message = await client.messages.create({
-      model: 'claude-opus-4-8',
-      max_tokens: 2000,
+      model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-8',
+      max_tokens: 5000,
       messages: [{ role: 'user', content }],
     })
+    const responseText = message.content.find(item => item.type === 'text')?.text || ''
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('The AI returned an invalid response. Please try again.')
+    const posts = JSON.parse(jsonMatch[0])
 
-    const responseText = message.content[0].text
-
-    // Parse JSON response
-    let posts
-    try {
-      posts = JSON.parse(responseText)
-    } catch {
-      // Try to extract JSON if there's extra text
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        posts = JSON.parse(jsonMatch[0])
-      } else {
-        throw new Error('Failed to parse AI response')
-      }
-    }
-
-    // Save all generated posts to the DB
     const insert = db.prepare(`
-      INSERT INTO generated_posts (id, employee_name, platform, goal, post_text, context)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO generated_posts
+        (id, employee_name, platform, goal, post_text, context, media_url, variant)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
     const postIds = {}
-    for (const platform of platformsToGenerate) {
-      if (posts[platform]) {
+    for (const platform of platforms) {
+      postIds[platform] = {}
+      for (const variant of ['balanced', 'personal', 'bold']) {
+        const postText = cleanText(posts?.[platform]?.[variant], 8000)
+        if (!postText) continue
         const id = uuidv4()
-        insert.run(id, employeeName || '', platform, goal, posts[platform], context || '')
-        postIds[platform] = id
+        insert.run(id, employeeName, platform, goal, postText, context, mediaUrl, variant)
+        postIds[platform][variant] = id
+        posts[platform][variant] = postText
       }
     }
 
-    return NextResponse.json({ posts, postIds })
+    return NextResponse.json({ posts, postIds, mediaUrl })
   } catch (error) {
     console.error('Generation error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to generate posts' },
+      { error: error.message || 'Failed to generate posts.' },
       { status: 500 }
     )
   }

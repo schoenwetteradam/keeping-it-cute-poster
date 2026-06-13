@@ -6,8 +6,10 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
+  const returnedState = searchParams.get('state')
+  const expectedState = request.cookies.get('linkedin_oauth_state')?.value
 
-  if (error || !code) {
+  if (error || !code || !returnedState || returnedState !== expectedState) {
     return NextResponse.redirect(new URL('/?linkedin=error', request.url))
   }
 

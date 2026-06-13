@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs'
 import db from '@/lib/db'
+import { validateUpload } from '@/lib/validation'
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads')
 
@@ -12,11 +13,17 @@ export async function POST(request) {
     const file = formData.get('file')
     const uploadedBy = formData.get('uploadedBy') || ''
 
-    if (!file || file.size === 0) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-    }
+    const validationError = validateUpload(file)
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
-    const ext = path.extname(file.name) || ''
+    const allowedExtensions = {
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/webp': '.webp',
+      'video/mp4': '.mp4',
+      'video/quicktime': '.mov',
+    }
+    const ext = allowedExtensions[file.type]
     const id = uuidv4()
     const filename = `${id}${ext}`
     const filepath = path.join(UPLOADS_DIR, filename)
