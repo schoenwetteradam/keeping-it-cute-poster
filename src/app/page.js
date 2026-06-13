@@ -1,187 +1,44 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const PLATFORMS = [
-  { id: 'facebook', label: 'Facebook', emoji: '📘', color: 'bg-blue-600' },
-  { id: 'instagram', label: 'Instagram', emoji: '📸', color: 'bg-gradient-to-r from-purple-500 to-pink-500' },
-  { id: 'linkedin', label: 'LinkedIn', emoji: '💼', color: 'bg-blue-700' },
+  { id: 'facebook', label: 'Facebook', color: 'bg-blue-600' },
+  { id: 'instagram', label: 'Instagram', color: 'bg-fuchsia-600' },
+  { id: 'linkedin', label: 'LinkedIn', color: 'bg-sky-700' },
 ]
 
 const GOALS = [
-  {
-    id: 'booth_renters',
-    label: 'Attract Booth Renters',
-    emoji: '💈',
-    description: 'Target stylists & beauty pros looking for a booth to rent',
-  },
-  {
-    id: 'new_clients',
-    label: 'Attract New Clients',
-    emoji: '💇',
-    description: 'Reach people looking for a new stylist or salon',
-  },
-  {
-    id: 'showcase',
-    label: 'Showcase My Work',
-    emoji: '✨',
-    description: 'Show off a transformation, style, or service — no specific pitch',
-  },
-  {
-    id: 'community',
-    label: 'Build Community',
-    emoji: '🤝',
-    description: 'Engage followers, share tips, or celebrate the salon culture',
-  },
+  { id: 'booth_renters', label: 'Attract Booth Renters', description: 'Reach independent beauty professionals looking for their next salon home.' },
+  { id: 'new_clients', label: 'Attract New Clients', description: 'Help potential clients picture the service, result, and experience.' },
+  { id: 'showcase', label: 'Showcase My Work', description: 'Share a transformation, technique, or service without a hard sell.' },
+  { id: 'community', label: 'Build Community', description: 'Share tips, celebrate the team, or start a genuine conversation.' },
 ]
 
-function StarRating({ value, onChange }) {
-  const [hovered, setHovered] = useState(0)
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map(star => (
-        <button
-          key={star}
-          type="button"
-          onMouseEnter={() => setHovered(star)}
-          onMouseLeave={() => setHovered(0)}
-          onClick={() => onChange(star)}
-          className="text-xl transition-transform hover:scale-110"
-        >
-          <span className={(hovered || value) >= star ? 'text-yellow-400' : 'text-gray-200'}>★</span>
-        </button>
-      ))}
-    </div>
-  )
+const VARIANTS = [
+  { id: 'balanced', label: 'Balanced' },
+  { id: 'personal', label: 'Personal' },
+  { id: 'bold', label: 'Bold' },
+]
+
+const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-100'
+const panelClass = 'rounded-2xl border border-pink-100 bg-white p-5 shadow-sm sm:p-6'
+
+async function api(url, options) {
+  const response = await fetch(url, options)
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'Something went wrong.')
+  return data
 }
 
-function RatingCard({ postId, platform, employeeName }) {
-  const [rating, setRating] = useState(0)
-  const [notes, setNotes] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-
-  const submit = async () => {
-    if (!rating) return
-    setSubmitting(true)
-    await fetch(`/api/posts/${postId}/rate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rating, notes, ratedBy: employeeName }),
-    })
-    setSubmitted(true)
-    setSubmitting(false)
+function Notice({ type = 'info', children }) {
+  const styles = {
+    info: 'border-blue-200 bg-blue-50 text-blue-800',
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    error: 'border-red-200 bg-red-50 text-red-700',
+    warning: 'border-amber-200 bg-amber-50 text-amber-800',
   }
-
-  if (submitted) return (
-    <div className="mt-3 pt-3 border-t border-pink-50 text-sm text-green-600 font-medium">
-      ✓ Thanks for the feedback! This helps the AI improve.
-    </div>
-  )
-
-  return (
-    <div className="mt-3 pt-3 border-t border-pink-50">
-      <p className="text-xs font-semibold text-gray-500 mb-2">How was this post? (helps the AI learn)</p>
-      <StarRating value={rating} onChange={setRating} />
-      {rating > 0 && (
-        <div className="mt-2 space-y-2">
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Optional note (e.g. 'too formal', 'loved the energy')"
-            rows={2}
-            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#E91E8C] resize-none"
-          />
-          <button
-            onClick={submit}
-            disabled={submitting}
-            className="text-xs bg-[#E91E8C] text-white px-4 py-1.5 rounded-lg font-semibold disabled:opacity-50"
-          >
-            {submitting ? 'Saving...' : 'Submit Rating'}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function InsightsTab() {
-  const [posts, setPosts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState('')
-
-  const load = async () => {
-    const res = await fetch('/api/posts?limit=50')
-    const data = await res.json()
-    setPosts(data.posts || [])
-    setLoading(false)
-  }
-
-  useEffect(() => { load() }, [])
-
-  const syncAll = async () => {
-    setSyncing(true)
-    const res = await fetch('/api/posts/sync-all', { method: 'POST' })
-    const data = await res.json()
-    setSyncMsg(`Synced ${data.synced} posts`)
-    await load()
-    setSyncing(false)
-    setTimeout(() => setSyncMsg(''), 4000)
-  }
-
-  const platformEmoji = { facebook: '📘', instagram: '📸', linkedin: '💼' }
-
-  return (
-    <div className="space-y-5">
-      <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-800">Post Performance</h3>
-          <button onClick={syncAll} disabled={syncing} className="text-sm bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold disabled:opacity-50">
-            {syncing ? 'Syncing...' : '🔄 Sync Facebook Stats'}
-          </button>
-        </div>
-        {syncMsg && <p className="text-green-600 text-sm mb-3">{syncMsg}</p>}
-        {loading ? <p className="text-gray-400 text-sm">Loading...</p> : posts.length === 0 ? (
-          <p className="text-gray-400 text-sm">No posts yet — generate and rate some posts to see insights here.</p>
-        ) : (
-          <div className="space-y-3">
-            {posts.map(post => (
-              <div key={post.id} className="border border-pink-50 rounded-xl p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span>{platformEmoji[post.platform] || '📝'}</span>
-                      <span className="text-xs font-semibold text-gray-500 uppercase">{post.platform}</span>
-                      <span className="text-xs text-gray-400">· {post.goal?.replace('_', ' ')}</span>
-                      {post.employee_name && <span className="text-xs text-pink-400">by {post.employee_name}</span>}
-                    </div>
-                    <p className="text-sm text-gray-700 leading-relaxed">
-                      {post.post_text?.slice(0, 120)}{post.post_text?.length > 120 ? '...' : ''}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    {post.avg_rating > 0 && (
-                      <div className="text-yellow-400 text-sm font-bold">{'★'.repeat(Math.round(post.avg_rating))}{'☆'.repeat(5 - Math.round(post.avg_rating))}</div>
-                    )}
-                    {post.avg_rating > 0 && <p className="text-xs text-gray-400">{Number(post.avg_rating).toFixed(1)}/5</p>}
-                  </div>
-                </div>
-                {(post.likes > 0 || post.comments > 0 || post.shares > 0 || post.reach > 0) && (
-                  <div className="mt-2 flex gap-4 text-xs text-gray-500">
-                    {post.likes > 0 && <span>👍 {post.likes}</span>}
-                    {post.comments > 0 && <span>💬 {post.comments}</span>}
-                    {post.shares > 0 && <span>🔁 {post.shares}</span>}
-                    {post.reach > 0 && <span>👁 {post.reach} reach</span>}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+  return <div className={`rounded-xl border px-4 py-3 text-sm ${styles[type]}`}>{children}</div>
 }
 
 function CopyButton({ text }) {
@@ -189,170 +46,414 @@ function CopyButton({ text }) {
   const copy = async () => {
     await navigator.clipboard.writeText(text)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => setCopied(false), 1500)
   }
   return (
-    <button
-      onClick={copy}
-      className="text-sm px-3 py-1.5 rounded-lg border border-pink-200 hover:bg-pink-50 transition-colors text-pink-600 font-medium"
-    >
-      {copied ? '✓ Copied!' : 'Copy'}
+    <button type="button" onClick={copy} className="rounded-lg border border-pink-200 px-3 py-2 text-xs font-semibold text-pink-700 hover:bg-pink-50">
+      {copied ? 'Copied' : 'Copy'}
     </button>
   )
 }
 
-function MediaLibrary({ onSelect }) {
-  const [media, setMedia] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [uploaderName, setUploaderName] = useState('')
-  const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef(null)
+function RatingCard({ postId, employeeName }) {
+  const [rating, setRating] = useState(0)
+  const [notes, setNotes] = useState('')
+  const [status, setStatus] = useState('idle')
 
-  const loadMedia = async () => {
-    const res = await fetch('/api/media')
-    const data = await res.json()
-    setMedia(data.media || [])
-    setLoading(false)
+  const submit = async () => {
+    if (!rating) return
+    setStatus('saving')
+    try {
+      await api(`/api/posts/${postId}/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, notes, ratedBy: employeeName }),
+      })
+      setStatus('saved')
+    } catch {
+      setStatus('error')
+    }
   }
 
-  useEffect(() => { loadMedia() }, [])
-
-  const handleUpload = async (f) => {
-    if (!f) return
-    setUploading(true)
-    const formData = new FormData()
-    formData.append('file', f)
-    formData.append('uploadedBy', uploaderName)
-    await fetch('/api/media/upload', { method: 'POST', body: formData })
-    await loadMedia()
-    setUploading(false)
-  }
-
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this file?')) return
-    await fetch('/api/media', { method: 'DELETE', body: JSON.stringify({ id }), headers: { 'Content-Type': 'application/json' } })
-    await loadMedia()
-  }
+  if (!postId) return null
+  if (status === 'saved') return <p className="mt-4 border-t border-pink-100 pt-3 text-xs font-semibold text-emerald-600">Feedback saved. Future drafts can learn from it.</p>
 
   return (
-    <div className="space-y-6">
-      {/* Upload to library */}
-      <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-6">
-        <h3 className="font-semibold text-gray-700 mb-4">Add to Library</h3>
-        <div className="flex gap-3 mb-4">
-          <input
-            type="text"
-            value={uploaderName}
-            onChange={e => setUploaderName(e.target.value)}
-            placeholder="Your name (optional)"
-            className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#E91E8C]"
-          />
-        </div>
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-pink-200 hover:border-[#E91E8C] rounded-xl p-8 text-center cursor-pointer hover:bg-pink-50 transition-all"
-        >
-          {uploading ? (
-            <p className="text-[#E91E8C] font-medium">Uploading...</p>
-          ) : (
-            <>
-              <span className="text-3xl block mb-2">📤</span>
-              <p className="font-medium text-gray-600">Click to upload photo or video</p>
-              <p className="text-xs text-gray-400 mt-1">Saved to the salon library for everyone to use</p>
-            </>
-          )}
-        </div>
-        <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={e => handleUpload(e.target.files[0])} />
+    <div className="mt-4 border-t border-pink-100 pt-3">
+      <p className="mb-2 text-xs font-semibold text-slate-500">Rate this draft to improve future suggestions</p>
+      <div className="flex gap-1" aria-label="Post rating">
+        {[1, 2, 3, 4, 5].map(star => (
+          <button key={star} type="button" onClick={() => setRating(star)} className={`text-xl ${rating >= star ? 'text-amber-400' : 'text-slate-200'}`} aria-label={`${star} stars`}>
+            *
+          </button>
+        ))}
       </div>
-
-      {/* Grid */}
-      <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-6">
-        <h3 className="font-semibold text-gray-700 mb-4">Salon Media Library ({media.length} files)</h3>
-        {loading ? (
-          <p className="text-gray-400 text-sm">Loading...</p>
-        ) : media.length === 0 ? (
-          <p className="text-gray-400 text-sm">No files uploaded yet. Add some above!</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {media.map(item => (
-              <div key={item.id} className="relative group rounded-xl overflow-hidden border border-pink-100 bg-gray-50">
-                {item.mime_type.startsWith('image/') ? (
-                  <img src={item.url} alt={item.original_name} className="w-full h-32 object-cover" />
-                ) : (
-                  <video src={item.url} className="w-full h-32 object-cover" />
-                )}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                  {onSelect && (
-                    <button
-                      onClick={() => onSelect(item)}
-                      className="bg-[#E91E8C] text-white text-xs px-3 py-1.5 rounded-lg font-semibold"
-                    >
-                      Use for Post
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="bg-red-500 text-white text-xs px-3 py-1.5 rounded-lg font-semibold"
-                  >
-                    Delete
-                  </button>
-                </div>
-                <div className="p-2">
-                  <p className="text-xs text-gray-500 truncate">{item.original_name}</p>
-                  {item.uploaded_by && <p className="text-xs text-pink-400">{item.uploaded_by}</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {rating > 0 ? (
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <input value={notes} onChange={event => setNotes(event.target.value)} className={inputClass} placeholder="Optional: too formal, great hook, more playful..." />
+          <button type="button" onClick={submit} disabled={status === 'saving'} className="shrink-0 rounded-xl bg-pink-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+            {status === 'saving' ? 'Saving...' : 'Save rating'}
+          </button>
+        </div>
+      ) : null}
+      {status === 'error' ? <p className="mt-2 text-xs text-red-600">The rating could not be saved.</p> : null}
     </div>
   )
 }
 
-function LibraryPicker({ onSelect, selected }) {
+function MediaPreview({ item, className = '' }) {
+  if (!item) return null
+  const type = item.mime_type || item.type || ''
+  if (type.startsWith('video/')) return <video src={item.url} controls className={className} />
+  return <img src={item.url} alt={item.original_name || 'Selected media'} className={className} />
+}
+
+function MediaLibrary({ onUse }) {
   const [media, setMedia] = useState([])
   const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef(null)
 
-  useEffect(() => {
-    fetch('/api/media')
-      .then(r => r.json())
-      .then(data => { setMedia(data.media || []); setLoading(false) })
+  const load = useCallback(async () => {
+    try {
+      const data = await api('/api/media')
+      setMedia(data.media || [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  if (loading) return <p className="text-gray-400 text-sm py-4">Loading library...</p>
-  if (media.length === 0) return (
-    <div className="border-2 border-dashed border-pink-100 rounded-xl p-6 text-center text-gray-400 text-sm">
-      No files in library yet. Upload some in the Media Library tab!
-    </div>
-  )
+  useEffect(() => { load() }, [load])
+
+  const upload = async file => {
+    if (!file) return
+    setUploading(true)
+    setError('')
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      await api('/api/media/upload', { method: 'POST', body })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const remove = async id => {
+    if (!window.confirm('Delete this media file?')) return
+    try {
+      await api('/api/media', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
-      {media.map(item => (
-        <div
-          key={item.id}
-          onClick={() => onSelect(item)}
-          className={`flex-shrink-0 relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
-            selected?.id === item.id ? 'border-[#E91E8C] shadow-md' : 'border-pink-100 hover:border-pink-300'
-          }`}
-          style={{ width: 100 }}
-        >
-          {item.mime_type.startsWith('image/') ? (
-            <img src={item.url} alt={item.original_name} className="w-full h-20 object-cover" />
-          ) : (
-            <video src={item.url} className="w-full h-20 object-cover" />
-          )}
-          {selected?.id === item.id && (
-            <div className="absolute inset-0 bg-[#E91E8C]/20 flex items-center justify-center">
-              <span className="text-[#E91E8C] text-xl font-bold">✓</span>
-            </div>
-          )}
-          <div className="p-1">
-            <p className="text-xs text-gray-400 truncate">{item.original_name}</p>
+    <div className="space-y-6">
+      <section className={panelClass}>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Salon Media Library</h2>
+            <p className="mt-1 text-sm text-slate-500">Keep approved photos and videos ready for the whole team.</p>
           </div>
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="rounded-xl bg-pink-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            {uploading ? 'Uploading...' : 'Upload media'}
+          </button>
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" className="hidden" onChange={event => upload(event.target.files?.[0])} />
         </div>
-      ))}
+        {error ? <div className="mt-4"><Notice type="error">{error}</Notice></div> : null}
+      </section>
+
+      <section className={panelClass}>
+        {loading ? <p className="text-sm text-slate-400">Loading media...</p> : null}
+        {!loading && media.length === 0 ? <p className="text-sm text-slate-400">No media yet. Upload the salon's best work to get started.</p> : null}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {media.map(item => (
+            <article key={item.id} className="overflow-hidden rounded-xl border border-pink-100 bg-slate-50">
+              <MediaPreview item={item} className="h-36 w-full object-cover" />
+              <div className="p-3">
+                <p className="truncate text-xs font-medium text-slate-600">{item.original_name}</p>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => onUse(item)} className="flex-1 rounded-lg bg-pink-600 px-2 py-2 text-xs font-bold text-white">Use</button>
+                  <button type="button" onClick={() => remove(item.id)} className="rounded-lg border border-red-200 px-2 py-2 text-xs font-bold text-red-600">Delete</button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function SettingsTab() {
+  const [settings, setSettings] = useState(null)
+  const [status, setStatus] = useState('loading')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    api('/api/settings')
+      .then(data => { setSettings(data.settings); setStatus('idle') })
+      .catch(err => { setMessage(err.message); setStatus('error') })
+  }, [])
+
+  const save = async event => {
+    event.preventDefault()
+    setStatus('saving')
+    try {
+      const data = await api('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      })
+      setSettings(data.settings)
+      setStatus('saved')
+      setTimeout(() => setStatus('idle'), 2500)
+    } catch (err) {
+      setMessage(err.message)
+      setStatus('error')
+    }
+  }
+
+  if (!settings) return <section className={panelClass}><p className="text-sm text-slate-400">Loading the Brand Brain...</p></section>
+
+  const fields = [
+    ['salonName', 'Salon name', 'text'],
+    ['voice', 'Brand voice', 'textarea'],
+    ['services', 'Services and specialties', 'textarea'],
+    ['location', 'Location and service area', 'text'],
+    ['bookingUrl', 'Booking URL', 'url'],
+    ['signaturePhrases', 'Signature phrases', 'textarea'],
+    ['avoidPhrases', 'Phrases or claims to avoid', 'textarea'],
+    ['boothBenefits', 'Booth renter benefits', 'textarea'],
+  ]
+
+  return (
+    <form onSubmit={save} className={panelClass}>
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-slate-900">Salon Brand Brain</h2>
+        <p className="mt-1 text-sm text-slate-500">These facts and voice rules are used in every generated draft.</p>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        {fields.map(([key, label, type]) => (
+          <label key={key} className={type === 'textarea' ? 'sm:col-span-2' : ''}>
+            <span className="mb-2 block text-sm font-semibold text-slate-700">{label}</span>
+            {type === 'textarea' ? (
+              <textarea rows={3} value={settings[key]} onChange={event => setSettings(current => ({ ...current, [key]: event.target.value }))} className={inputClass} />
+            ) : (
+              <input type={type} value={settings[key]} onChange={event => setSettings(current => ({ ...current, [key]: event.target.value }))} className={inputClass} />
+            )}
+          </label>
+        ))}
+      </div>
+      {status === 'error' ? <div className="mt-4"><Notice type="error">{message}</Notice></div> : null}
+      <button type="submit" disabled={status === 'saving'} className="mt-6 rounded-xl bg-pink-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">
+        {status === 'saving' ? 'Saving...' : status === 'saved' ? 'Saved' : 'Save Brand Brain'}
+      </button>
+    </form>
+  )
+}
+
+function InsightsTab() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  const [syncing, setSyncing] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      setData(await api('/api/posts?limit=50'))
+    } catch (err) {
+      setError(err.message)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const sync = async () => {
+    setSyncing(true)
+    try {
+      await api('/api/posts/sync-all', { method: 'POST' })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  if (!data) return <section className={panelClass}>{error ? <Notice type="error">{error}</Notice> : <p className="text-sm text-slate-400">Loading insights...</p>}</section>
+
+  const summary = data.summary || {}
+  const recommendation = data.performance?.[0]
+  const cards = [
+    ['Drafts created', summary.total_posts || 0],
+    ['Published', summary.published_posts || 0],
+    ['Avg. engagement', summary.avg_engagement || 0],
+    ['Avg. team rating', summary.avg_rating || 0],
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {cards.map(([label, value]) => (
+          <div key={label} className={panelClass}>
+            <p className="text-2xl font-black text-slate-900">{value}</p>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+          </div>
+        ))}
+      </div>
+      {recommendation ? (
+        <Notice type="success">
+          Current strongest pattern: <strong>{recommendation.variant}</strong> {recommendation.platform} posts for <strong>{String(recommendation.goal).replaceAll('_', ' ')}</strong>.
+        </Notice>
+      ) : (
+        <Notice>Rate and publish more drafts to unlock evidence-based recommendations.</Notice>
+      )}
+      <section className={panelClass}>
+        <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="font-bold text-slate-900">Recent Performance</h2>
+            <p className="text-sm text-slate-500">Ratings and Facebook engagement feed future generation.</p>
+          </div>
+          <button type="button" onClick={sync} disabled={syncing} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+            {syncing ? 'Syncing...' : 'Sync Facebook stats'}
+          </button>
+        </div>
+        {error ? <Notice type="error">{error}</Notice> : null}
+        <div className="space-y-3">
+          {(data.posts || []).map(post => (
+            <article key={post.id} className="rounded-xl border border-pink-100 p-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase text-slate-400">
+                <span>{post.platform}</span><span>/</span><span>{post.variant}</span><span>/</span><span>{String(post.goal).replaceAll('_', ' ')}</span>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{post.post_text?.slice(0, 180)}{post.post_text?.length > 180 ? '...' : ''}</p>
+              <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
+                <span>{post.likes || 0} likes</span>
+                <span>{post.comments || 0} comments</span>
+                <span>{post.shares || 0} shares</span>
+                <span>{post.avg_rating ? `${Number(post.avg_rating).toFixed(1)}/5 rating` : 'Not rated'}</span>
+              </div>
+            </article>
+          ))}
+          {data.posts?.length === 0 ? <p className="text-sm text-slate-400">No drafts have been generated yet.</p> : null}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function Results({ posts, setPosts, postIds, mediaUrl, employeeName, linkedinConnected }) {
+  const [selected, setSelected] = useState(() => Object.fromEntries(Object.keys(posts).map(platform => [platform, 'balanced'])))
+  const [posting, setPosting] = useState({})
+  const [results, setResults] = useState({})
+  const [saving, setSaving] = useState({})
+  const isLocalhost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+
+  const updateText = (platform, variant, value) => {
+    setPosts(current => ({ ...current, [platform]: { ...current[platform], [variant]: value } }))
+  }
+
+  const saveDraft = async (platform, variant) => {
+    const id = postIds?.[platform]?.[variant]
+    if (!id) return
+    setSaving(current => ({ ...current, [platform]: true }))
+    try {
+      await api(`/api/posts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postText: posts[platform][variant] }),
+      })
+      setSaving(current => ({ ...current, [platform]: false }))
+    } catch (err) {
+      setResults(current => ({ ...current, [platform]: { error: err.message } }))
+      setSaving(current => ({ ...current, [platform]: false }))
+    }
+  }
+
+  const publish = async platform => {
+    const variant = selected[platform]
+    const text = posts[platform][variant]
+    const generatedPostId = postIds?.[platform]?.[variant]
+    setPosting(current => ({ ...current, [platform]: true }))
+    setResults(current => ({ ...current, [platform]: null }))
+    try {
+      await saveDraft(platform, variant)
+      const imageUrl = mediaUrl ? new URL(mediaUrl, window.location.origin).toString() : ''
+      const data = await api(`/api/post/${platform}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, postId: generatedPostId, imageUrl }),
+      })
+      setResults(current => ({ ...current, [platform]: data }))
+    } catch (err) {
+      setResults(current => ({ ...current, [platform]: { error: err.message } }))
+    } finally {
+      setPosting(current => ({ ...current, [platform]: false }))
+    }
+  }
+
+  return (
+    <div className="mt-10 space-y-5">
+      <div className="text-center">
+        <h2 className="text-2xl font-black text-slate-900">Choose, edit, and publish</h2>
+        <p className="mt-1 text-sm text-slate-500">Each platform has three distinct directions. Your edits are saved before publishing.</p>
+      </div>
+      {Object.keys(posts).map(platform => {
+        const variant = selected[platform]
+        const text = posts[platform]?.[variant] || ''
+        const result = results[platform]
+        const platformInfo = PLATFORMS.find(item => item.id === platform)
+        return (
+          <section key={platform} className="overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm">
+            <header className="flex flex-col gap-3 border-b border-pink-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-black text-slate-900">{platformInfo?.label || platform}</h3>
+                <p className="text-xs text-slate-400">{text.length} characters</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {VARIANTS.map(option => (
+                  <button key={option.id} type="button" onClick={() => setSelected(current => ({ ...current, [platform]: option.id }))} className={`rounded-lg px-3 py-2 text-xs font-bold ${variant === option.id ? 'bg-pink-600 text-white' : 'bg-pink-50 text-pink-700'}`}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </header>
+            <div className="p-5">
+              <textarea rows={10} value={text} onChange={event => updateText(platform, variant, event.target.value)} className={`${inputClass} leading-6`} />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <CopyButton text={text} />
+                <button type="button" onClick={() => saveDraft(platform, variant)} disabled={saving[platform]} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600">
+                  {saving[platform] ? 'Saving...' : 'Save draft'}
+                </button>
+                {platform === 'linkedin' && linkedinConnected === false ? (
+                  <a href="/api/linkedin/auth" className="rounded-lg bg-sky-700 px-4 py-2 text-xs font-bold text-white">Connect LinkedIn</a>
+                ) : (
+                  <button type="button" onClick={() => publish(platform)} disabled={posting[platform]} className={`rounded-lg px-4 py-2 text-xs font-bold text-white disabled:opacity-50 ${platformInfo?.color || 'bg-pink-600'}`}>
+                    {posting[platform] ? 'Publishing...' : `Publish to ${platformInfo?.label || platform}`}
+                  </button>
+                )}
+              </div>
+              {platform === 'instagram' && mediaUrl && isLocalhost ? (
+                <div className="mt-3"><Notice type="warning">Instagram cannot fetch a localhost image. Publish from the deployed app or use Copy for local testing.</Notice></div>
+              ) : null}
+              {platform === 'instagram' && !mediaUrl ? <div className="mt-3"><Notice type="warning">Instagram requires an image. Add media and generate again before publishing.</Notice></div> : null}
+              {result?.success ? <div className="mt-3"><Notice type="success">Published successfully. {result.url ? <a className="font-bold underline" href={result.url} target="_blank" rel="noreferrer">Open platform</a> : null}</Notice></div> : null}
+              {result?.error ? <div className="mt-3"><Notice type="error">{result.error}</Notice></div> : null}
+              <RatingCard postId={postIds?.[platform]?.[variant]} employeeName={employeeName} />
+            </div>
+          </section>
+        )
+      })}
     </div>
   )
 }
@@ -361,104 +462,66 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('create')
   const [employeeName, setEmployeeName] = useState('')
   const [context, setContext] = useState('')
-  const [goal, setGoal] = useState('booth_renters')
+  const [goal, setGoal] = useState('showcase')
   const [selectedPlatforms, setSelectedPlatforms] = useState(['facebook', 'instagram', 'linkedin'])
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [libraryItem, setLibraryItem] = useState(null)
   const [posts, setPosts] = useState(null)
-  const [error, setError] = useState(null)
-  const [dragOver, setDragOver] = useState(false)
-  const fileInputRef = useRef(null)
   const [postIds, setPostIds] = useState({})
-  const [posting, setPosting] = useState({})
-  const [postResults, setPostResults] = useState({})
+  const [mediaUrl, setMediaUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [linkedinConnected, setLinkedinConnected] = useState(null)
-  const [linkedinToast, setLinkedinToast] = useState(false)
-  const [fileSource, setFileSource] = useState('upload')
-  const [selectedLibraryItem, setSelectedLibraryItem] = useState(null)
+  const fileRef = useRef(null)
 
   useEffect(() => {
-    fetch('/api/linkedin/status')
-      .then(r => r.json())
-      .then(d => setLinkedinConnected(d.connected && !d.expired))
+    api('/api/linkedin/status')
+      .then(data => setLinkedinConnected(data.connected && !data.expired))
       .catch(() => setLinkedinConnected(false))
-
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('linkedin') === 'connected') {
-      setLinkedinToast(true)
-      setTimeout(() => setLinkedinToast(false), 5000)
-      window.history.replaceState({}, '', '/')
-    }
   }, [])
 
-  const syncFacebookStats = async () => {
-    await fetch('/api/posts/sync-all', { method: 'POST' })
-    alert('Facebook stats synced!')
+  useEffect(() => () => {
+    if (preview?.temporary) URL.revokeObjectURL(preview.url)
+  }, [preview])
+
+  const selectFile = selectedFile => {
+    if (!selectedFile) return
+    if (preview?.temporary) URL.revokeObjectURL(preview.url)
+    setFile(selectedFile)
+    setLibraryItem(null)
+    setPreview({ url: URL.createObjectURL(selectedFile), type: selectedFile.type, temporary: true })
   }
 
-  const postToPlatform = async (platformId, text) => {
-    setPosting(prev => ({ ...prev, [platformId]: 'loading' }))
-    try {
-      const res = await fetch(`/api/post/${platformId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, postId: postIds[platformId] }),
-      })
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error)
-      setPosting(prev => ({ ...prev, [platformId]: 'success' }))
-      setPostResults(prev => ({ ...prev, [platformId]: data }))
-    } catch (err) {
-      setPosting(prev => ({ ...prev, [platformId]: 'error' }))
-      setPostResults(prev => ({ ...prev, [platformId]: { error: err.message } }))
-    }
+  const useLibraryItem = item => {
+    if (preview?.temporary) URL.revokeObjectURL(preview.url)
+    setLibraryItem(item)
+    setFile(null)
+    setPreview({ url: item.url, type: item.mime_type })
+    setActiveTab('create')
   }
 
-  const handleFile = (f) => {
-    if (!f) return
-    setFile(f)
-    const url = URL.createObjectURL(f)
-    setPreview({ url, type: f.type })
+  const togglePlatform = platform => {
+    setSelectedPlatforms(current => current.includes(platform) ? current.filter(item => item !== platform) : [...current, platform])
   }
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault()
-    setDragOver(false)
-    const f = e.dataTransfer.files[0]
-    if (f) handleFile(f)
-  }, [])
-
-  const togglePlatform = (id) => {
-    setSelectedPlatforms(prev =>
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    )
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!employeeName.trim()) { setError('Please enter your name'); return }
-    if (selectedPlatforms.length === 0) { setError('Select at least one platform'); return }
-
+  const submit = async event => {
+    event.preventDefault()
     setLoading(true)
-    setError(null)
+    setError('')
     setPosts(null)
-
     try {
-      const formData = new FormData()
-      formData.append('employeeName', employeeName)
-      formData.append('context', context)
-      formData.append('goal', goal)
-      formData.append('platforms', JSON.stringify(selectedPlatforms))
-      if (file) formData.append('file', file)
-      if (selectedLibraryItem) formData.append('libraryImageUrl', selectedLibraryItem.url)
-
-      const res = await fetch('/api/generate', { method: 'POST', body: formData })
-      const data = await res.json()
-
-      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      const body = new FormData()
+      body.append('employeeName', employeeName)
+      body.append('context', context)
+      body.append('goal', goal)
+      body.append('platforms', JSON.stringify(selectedPlatforms))
+      if (file) body.append('file', file)
+      if (libraryItem) body.append('libraryImageUrl', libraryItem.url)
+      const data = await api('/api/generate', { method: 'POST', body })
       setPosts(data.posts)
-      setPostIds(data.postIds || {})
+      setPostIds(data.postIds)
+      setMediaUrl(data.mediaUrl || '')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -466,336 +529,104 @@ export default function Home() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[#fdf4f9]">
-      {/* Header */}
-      <div className="bg-white border-b border-pink-100 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-6 text-center">
-          <div className="flex items-center justify-center gap-3 mb-1">
-            <span className="text-4xl">✂️</span>
-            <h1 className="text-3xl font-bold text-[#1a1a2e]">Keeping It Cute</h1>
-            <span className="text-4xl">💅</span>
-          </div>
-          <p className="text-[#E91E8C] font-semibold tracking-wide text-sm uppercase">Salon & Spa · Social Media Post Generator</p>
-        </div>
-      </div>
+  const tabs = [
+    ['create', 'Create'],
+    ['library', 'Media'],
+    ['insights', 'Insights'],
+    ['settings', 'Brand Brain'],
+  ]
 
-      {/* Tab Bar */}
-      <div className="flex border-b border-pink-100 bg-white">
-        <div className="max-w-4xl mx-auto px-4 w-full flex gap-1 pt-2">
-          {[
-            { id: 'create', label: '✨ Create Post' },
-            { id: 'library', label: '📁 Media Library' },
-            { id: 'insights', label: '📊 Insights' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-2.5 text-sm font-semibold rounded-t-xl transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-[#fdf4f9] text-[#E91E8C] border-b-2 border-[#E91E8C]'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              {tab.label}
+  return (
+    <main className="min-h-screen bg-[#fdf4f9] text-slate-800">
+      <header className="border-b border-pink-100 bg-white">
+        <div className="mx-auto max-w-5xl px-4 py-6">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950">Keeping It Cute</h1>
+              <p className="mt-1 text-sm font-semibold text-pink-600">Salon social content assistant</p>
+            </div>
+            <p className="max-w-md text-sm text-slate-500">Create on-brand drafts, publish them, and learn which messages actually connect.</p>
+          </div>
+        </div>
+        <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4" aria-label="Main navigation">
+          {tabs.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setActiveTab(id)} className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-bold ${activeTab === id ? 'border-pink-600 text-pink-700' : 'border-transparent text-slate-400 hover:text-slate-700'}`}>
+              {label}
             </button>
           ))}
-        </div>
-      </div>
+        </nav>
+      </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-10">
-        {activeTab === 'library' ? (
-          <MediaLibrary onSelect={(item) => { setSelectedLibraryItem(item); setFileSource('library'); setActiveTab('create') }} />
-        ) : activeTab === 'insights' ? (
-          <InsightsTab />
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Name */}
-            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Your Name ✨</label>
-              <input
-                type="text"
-                value={employeeName}
-                onChange={e => setEmployeeName(e.target.value)}
-                placeholder="e.g. Jessica"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E91E8C] focus:border-transparent transition text-gray-800"
-              />
-            </div>
-
-            {/* Context */}
-            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Tell us about this post 💬</label>
-              <textarea
-                value={context}
-                onChange={e => setContext(e.target.value)}
-                rows={4}
-                placeholder="e.g. Just finished this gorgeous balayage on a client — she came in wanting beachy waves and we DELIVERED. She cried happy tears! Used Redken shades..."
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E91E8C] focus:border-transparent transition text-gray-800 resize-none"
-              />
-            </div>
-
-            {/* Goal / Audience */}
-            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-1">What's the goal of this post? 🎯</label>
-              <p className="text-xs text-gray-400 mb-4">This tells the AI who you're trying to reach so the message lands right.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {GOALS.map(g => (
-                  <button
-                    key={g.id}
-                    type="button"
-                    onClick={() => setGoal(g.id)}
-                    className={`text-left px-4 py-3 rounded-xl border-2 transition-all ${
-                      goal === g.id
-                        ? 'border-[#E91E8C] bg-pink-50'
-                        : 'border-gray-100 hover:border-pink-200 bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 font-semibold text-sm text-gray-800 mb-0.5">
-                      <span>{g.emoji}</span> {g.label}
-                      {goal === g.id && <span className="ml-auto text-[#E91E8C] text-xs font-bold">✓ Selected</span>}
-                    </div>
-                    <p className="text-xs text-gray-400 leading-snug">{g.description}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* File / Media */}
-            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">Photo or Video 📸</label>
-
-              {/* Toggle */}
-              <div className="flex gap-2 mb-4">
-                {[
-                  { id: 'upload', label: 'Upload New' },
-                  { id: 'library', label: 'Pick from Library' },
-                ].map(opt => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => { setFileSource(opt.id); setSelectedLibraryItem(null); setFile(null); setPreview(null) }}
-                    className={`px-4 py-2 rounded-full text-sm font-medium border-2 transition-all ${
-                      fileSource === opt.id
-                        ? 'bg-[#E91E8C] text-white border-[#E91E8C]'
-                        : 'bg-white text-gray-500 border-gray-200 hover:border-pink-300'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {fileSource === 'upload' ? (
-                <>
-                  <div
-                    onDrop={handleDrop}
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                    onDragLeave={() => setDragOver(false)}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                      dragOver ? 'border-[#E91E8C] bg-pink-50' : 'border-pink-200 hover:border-[#E91E8C] hover:bg-pink-50'
-                    }`}
-                  >
-                    {preview ? (
-                      <div className="flex flex-col items-center gap-3">
-                        {preview.type.startsWith('image/') ? (
-                          <img src={preview.url} alt="Preview" className="max-h-48 rounded-lg object-cover shadow-md" />
-                        ) : (
-                          <video src={preview.url} className="max-h-48 rounded-lg shadow-md" controls />
-                        )}
-                        <p className="text-sm text-gray-500">Click to change file</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 text-gray-400">
-                        <span className="text-4xl">📁</span>
-                        <p className="font-medium text-gray-600">Drag & drop or click to upload</p>
-                        <p className="text-sm">Photos or Videos (optional)</p>
-                      </div>
-                    )}
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,video/*"
-                    className="hidden"
-                    onChange={e => handleFile(e.target.files[0])}
-                  />
-                </>
-              ) : (
-                <div>
-                  <LibraryPicker
-                    onSelect={(item) => {
-                      setSelectedLibraryItem(item)
-                      setFile(null)
-                      setPreview({ url: item.url, type: item.mime_type })
-                    }}
-                    selected={selectedLibraryItem}
-                  />
-                  {selectedLibraryItem && preview && (
-                    <div className="mt-4 flex flex-col items-center gap-2">
-                      {preview.type.startsWith('image/') ? (
-                        <img src={preview.url} alt="Selected" className="max-h-48 rounded-lg object-cover shadow-md" />
-                      ) : (
-                        <video src={preview.url} className="max-h-48 rounded-lg shadow-md" controls />
-                      )}
-                      <p className="text-xs text-[#E91E8C] font-medium">✓ {selectedLibraryItem.original_name} selected</p>
-                    </div>
-                  )}
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        {activeTab === 'library' ? <MediaLibrary onUse={useLibraryItem} /> : null}
+        {activeTab === 'settings' ? <SettingsTab /> : null}
+        {activeTab === 'insights' ? <InsightsTab /> : null}
+        {activeTab === 'create' ? (
+          <>
+            <form onSubmit={submit} className="space-y-5">
+              <section className={panelClass}>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label>
+                    <span className="mb-2 block text-sm font-bold text-slate-700">Your name</span>
+                    <input value={employeeName} onChange={event => setEmployeeName(event.target.value)} className={inputClass} placeholder="Jessica" required />
+                  </label>
+                  <label>
+                    <span className="mb-2 block text-sm font-bold text-slate-700">Post goal</span>
+                    <select value={goal} onChange={event => setGoal(event.target.value)} className={inputClass}>
+                      {GOALS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                    </select>
+                  </label>
                 </div>
-              )}
-            </div>
+                <p className="mt-3 text-xs text-slate-400">{GOALS.find(item => item.id === goal)?.description}</p>
+              </section>
 
-            {/* Platforms */}
-            <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">Generate posts for 🌐</label>
-              <div className="flex flex-wrap gap-3">
-                {PLATFORMS.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => togglePlatform(p.id)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-medium text-sm transition-all border-2 ${
-                      selectedPlatforms.includes(p.id)
-                        ? 'bg-[#E91E8C] text-white border-[#E91E8C] shadow-md'
-                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#E91E8C]'
-                    }`}
-                  >
-                    <span>{p.emoji}</span> {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+              <section className={panelClass}>
+                <label>
+                  <span className="mb-2 block text-sm font-bold text-slate-700">What should the post say?</span>
+                  <textarea value={context} onChange={event => setContext(event.target.value)} rows={5} className={inputClass} placeholder="Describe the service, transformation, client reaction, promotion, event, opening, or idea. Specific details create stronger posts." />
+                </label>
+              </section>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm">
-                ⚠️ {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-4 rounded-2xl font-bold text-lg text-white shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ background: loading ? '#ccc' : 'linear-gradient(135deg, #E91E8C, #C9A84C)' }}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-3">
-                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12 0 12 12h4a8 8 0 01-8 8" />
-                  </svg>
-                  Crafting your posts...
-                </span>
-              ) : '✨ Generate Posts'}
-            </button>
-          </form>
-        )}
-
-        {/* Results */}
-        {posts && activeTab === 'create' && (
-          <div className="mt-10 space-y-5">
-            {linkedinToast && (
-              <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm font-medium">
-                ✓ LinkedIn connected successfully! You can now post directly to LinkedIn.
-              </div>
-            )}
-
-            <h2 className="text-xl font-bold text-[#1a1a2e] text-center">Your Posts Are Ready! 🎉</h2>
-
-            {linkedinConnected === false && posts['linkedin'] && (
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl px-4 py-3 text-sm flex items-center justify-between">
-                <span>⚠️ LinkedIn not connected — connect to enable direct posting</span>
-                <a
-                  href="/api/linkedin/auth"
-                  className="ml-4 text-blue-700 font-semibold underline hover:no-underline whitespace-nowrap"
-                >
-                  Connect LinkedIn →
-                </a>
-              </div>
-            )}
-
-            {PLATFORMS.filter(p => posts[p.id]).map(p => {
-              const status = posting[p.id] || 'idle'
-              const result = postResults[p.id]
-              return (
-                <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-pink-100 overflow-hidden">
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-pink-50 flex-wrap gap-2">
-                    <div className="flex items-center gap-2 font-bold text-gray-800">
-                      <span className="text-xl">{p.emoji}</span>
-                      <span>{p.label}</span>
-                    </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-xs text-gray-400">{posts[p.id].length} chars</span>
-                      <CopyButton text={posts[p.id]} />
-                      {p.id === 'linkedin' && linkedinConnected === false ? (
-                        <a
-                          href="/api/linkedin/auth"
-                          className="text-sm px-3 py-1.5 rounded-lg bg-blue-700 text-white font-medium hover:bg-blue-800 transition-colors"
-                        >
-                          Connect LinkedIn
-                        </a>
-                      ) : (
-                        <button
-                          onClick={() => postToPlatform(p.id, posts[p.id])}
-                          disabled={status === 'loading' || status === 'success'}
-                          className="text-sm px-3 py-1.5 rounded-lg bg-[#E91E8C] text-white font-medium hover:bg-pink-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
-                        >
-                          {status === 'loading' ? (
-                            <>
-                              <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12 0 12 12h4a8 8 0 01-8 8" />
-                              </svg>
-                              Posting...
-                            </>
-                          ) : status === 'success' ? (
-                            <span className="text-green-100">✓ Posted!</span>
-                          ) : (
-                            'Post Now 🚀'
-                          )}
-                        </button>
-                      )}
-                    </div>
+              <section className={panelClass}>
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-700">Photo or video</h2>
+                    <p className="mt-1 text-xs text-slate-400">JPG, PNG, WebP, MP4, or MOV up to 25 MB.</p>
                   </div>
-                  {status === 'success' && result?.url && (
-                    <div className="px-6 py-2 bg-green-50 border-b border-green-100 text-sm text-green-700 flex items-center gap-2">
-                      ✓ Successfully posted!
-                      <a href={result.url} target="_blank" rel="noopener noreferrer" className="underline font-medium hover:no-underline ml-1">
-                        View Post →
-                      </a>
-                    </div>
-                  )}
-                  {status === 'error' && result?.error && (
-                    <div className="px-6 py-2 bg-red-50 border-b border-red-100 text-sm text-red-600">
-                      ⚠️ {result.error}
-                    </div>
-                  )}
-                  <div className="px-6 py-5">
-                    <pre className="whitespace-pre-wrap font-sans text-gray-700 leading-relaxed text-sm">{posts[p.id]}</pre>
-                    {postIds[p.id] && (
-                      <RatingCard postId={postIds[p.id]} platform={p.id} employeeName={employeeName} />
-                    )}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => fileRef.current?.click()} className="rounded-xl border border-pink-200 px-4 py-2 text-xs font-bold text-pink-700">Upload new</button>
+                    <button type="button" onClick={() => setActiveTab('library')} className="rounded-xl bg-pink-50 px-4 py-2 text-xs font-bold text-pink-700">Choose library</button>
                   </div>
+                  <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" className="hidden" onChange={event => selectFile(event.target.files?.[0])} />
                 </div>
-              )
-            })}
-            {postResults.facebook?.success && (
-              <button
-                onClick={syncFacebookStats}
-                className="w-full py-2.5 rounded-xl border-2 border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50 transition-colors"
-              >
-                📊 Sync Facebook Engagement Stats
+                {preview ? (
+                  <div className="mt-4 flex items-start gap-4">
+                    <MediaPreview item={preview} className="h-36 w-36 rounded-xl object-cover" />
+                    <button type="button" onClick={() => { setFile(null); setLibraryItem(null); setPreview(null) }} className="text-xs font-bold text-red-600">Remove</button>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className={panelClass}>
+                <h2 className="mb-3 text-sm font-bold text-slate-700">Platforms</h2>
+                <div className="flex flex-wrap gap-2">
+                  {PLATFORMS.map(platform => (
+                    <button key={platform.id} type="button" onClick={() => togglePlatform(platform.id)} className={`rounded-full border-2 px-5 py-2 text-sm font-bold ${selectedPlatforms.includes(platform.id) ? 'border-pink-600 bg-pink-600 text-white' : 'border-slate-200 text-slate-500'}`}>
+                      {platform.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {error ? <Notice type="error">{error}</Notice> : null}
+              <button type="submit" disabled={loading || selectedPlatforms.length === 0} className="w-full rounded-2xl bg-gradient-to-r from-pink-600 to-amber-500 px-6 py-4 text-base font-black text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-50">
+                {loading ? 'Creating three directions for each platform...' : 'Generate smart drafts'}
               </button>
-            )}
-            <button
-              onClick={() => { setPosts(null); setContext(''); setFile(null); setPreview(null); setGoal('booth_renters'); setPosting({}); setPostResults({}); setSelectedLibraryItem(null); setFileSource('upload'); setPostIds({}) }}
-              className="w-full py-3 rounded-2xl border-2 border-pink-200 text-[#E91E8C] font-semibold hover:bg-pink-50 transition-colors"
-            >
-              Create Another Post
-            </button>
-          </div>
-        )}
+            </form>
+            {posts ? <Results posts={posts} setPosts={setPosts} postIds={postIds} mediaUrl={mediaUrl} employeeName={employeeName} linkedinConnected={linkedinConnected} /> : null}
+          </>
+        ) : null}
       </div>
-    </div>
+    </main>
   )
 }

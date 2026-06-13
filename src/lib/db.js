@@ -37,7 +37,11 @@ db.exec(`
     comments INTEGER DEFAULT 0,
     shares INTEGER DEFAULT 0,
     reach INTEGER DEFAULT 0,
-    engagement_updated_at TEXT
+    engagement_updated_at TEXT,
+    media_url TEXT DEFAULT '',
+    variant TEXT DEFAULT 'balanced',
+    external_post_id TEXT DEFAULT '',
+    posted_at TEXT
   );
 
   CREATE TABLE IF NOT EXISTS post_ratings (
@@ -48,6 +52,24 @@ db.exec(`
     rated_by TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS brand_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `)
+
+function ensureColumn(table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all()
+  if (!columns.some(item => item.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+}
+
+ensureColumn('generated_posts', 'media_url', "TEXT DEFAULT ''")
+ensureColumn('generated_posts', 'variant', "TEXT DEFAULT 'balanced'")
+ensureColumn('generated_posts', 'external_post_id', "TEXT DEFAULT ''")
+ensureColumn('generated_posts', 'posted_at', 'TEXT')
 
 export default db

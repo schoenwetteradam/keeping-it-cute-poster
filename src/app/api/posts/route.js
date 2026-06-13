@@ -51,7 +51,37 @@ export async function GET(request) {
       LIMIT ?
     `).all(...params)
 
-    return NextResponse.json({ posts })
+    const summary = db.prepare(`
+      SELECT
+        COUNT(*) AS total_posts,
+        SUM(CASE WHEN posted = 1 THEN 1 ELSE 0 END) AS published_posts,
+        ROUND(AVG(NULLIF(likes + comments + shares, 0)), 1) AS avg_engagement,
+        ROUND(AVG(pr.avg_rating), 1) AS avg_rating
+      FROM generated_posts gp
+      LEFT JOIN (
+        SELECT post_id, AVG(rating) AS avg_rating
+        FROM post_ratings
+        GROUP BY post_id
+      ) pr ON pr.post_id = gp.id
+    `).get()
+
+    const performance = db.prepare(`
+      SELECT platform, goal, variant,
+        COUNT(*) AS post_count,
+        ROUND(AVG(likes + comments * 2 + shares * 3), 1) AS engagement_score,
+        ROUND(AVG(pr.avg_rating), 1) AS avg_rating
+      FROM generated_posts gp
+      LEFT JOIN (
+        SELECT post_id, AVG(rating) AS avg_rating
+        FROM post_ratings
+        GROUP BY post_id
+      ) pr ON pr.post_id = gp.id
+      GROUP BY platform, goal, variant
+      HAVING COUNT(*) > 0
+      ORDER BY engagement_score DESC, avg_rating DESC
+    `).all()
+
+    return NextResponse.json({ posts, summary, performance })
   } catch (error) {
     console.error('List posts error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

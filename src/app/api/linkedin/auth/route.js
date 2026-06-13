@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
 
 export async function GET() {
   const clientId = process.env.LINKEDIN_CLIENT_ID
@@ -11,7 +12,7 @@ export async function GET() {
     )
   }
 
-  const state = Math.random().toString(36).substring(2, 15)
+  const state = randomBytes(24).toString('hex')
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
@@ -21,5 +22,13 @@ export async function GET() {
   })
 
   const authUrl = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`
-  return NextResponse.redirect(authUrl)
+  const response = NextResponse.redirect(authUrl)
+  response.cookies.set('linkedin_oauth_state', state, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 600,
+    path: '/',
+  })
+  return response
 }
