@@ -34,10 +34,16 @@ export async function GET(request) {
     const goal = searchParams.get('goal')
     const limit = parseInt(searchParams.get('limit') || '20', 10)
 
+    const status = searchParams.get('status')
+    const date = searchParams.get('date')
+
     let where = 'WHERE 1=1'
     const params = []
     if (platform) { where += ' AND gp.platform = ?'; params.push(platform) }
     if (goal) { where += ' AND gp.goal = ?'; params.push(goal) }
+    if (status === 'scheduled') { where += ' AND gp.publish_status = \'scheduled\' AND gp.posted = 0'; }
+    if (status === 'failed') { where += ' AND gp.publish_status = \'failed\' AND gp.posted = 0'; }
+    if (date) { where += ' AND substr(gp.created_at, 1, 10) = ?'; params.push(date) }
 
     params.push(limit)
 
@@ -47,7 +53,7 @@ export async function GET(request) {
       LEFT JOIN post_ratings pr ON pr.post_id = gp.id
       ${where}
       GROUP BY gp.id
-      ORDER BY avg_rating DESC, gp.likes DESC
+      ORDER BY gp.created_at DESC
       LIMIT ?
     `).all(...params)
 

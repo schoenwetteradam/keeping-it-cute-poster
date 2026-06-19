@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { cleanText, validateUpload } from '@/lib/validation'
+import { rateLimit } from '@/lib/rateLimit'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs'
@@ -29,9 +30,28 @@ const GOALS = {
 }
 
 const PLATFORM_GUIDANCE = {
-  facebook: 'Conversational and warm. Use a short story, readable paragraphs, restrained emojis, and a natural call to action. Aim for 120-250 words.',
-  instagram: 'Visual and energetic. Lead with a hook, use readable line breaks, and finish with 8-15 highly relevant hashtags rather than a generic block. Aim for 90-180 caption words.',
-  linkedin: 'Professional but human. Emphasize craft, entrepreneurship, service, or professional growth. Use no more than two emojis and finish with 3-5 focused hashtags. Aim for 90-160 words.',
+  facebook: 'Conversational and warm. Use a short story, readable paragraphs, restrained emojis, and a natural call to action. Aim for 120-250 words. Do NOT add hashtags to Facebook posts.',
+  instagram: 'Visual and energetic. Lead with a strong first-line hook (it appears before "more"). Use readable line breaks. End with a line break then 10-15 highly targeted hashtags — mix niche tags (#btccuts #protectivestyles) with local and salon tags. Aim for 90-180 caption words before hashtags.',
+  linkedin: 'Professional but human. Emphasize craft, entrepreneurship, service, or professional growth. Open with a hook. Use at most two emojis. End with 3-5 focused hashtags. Aim for 90-160 words.',
+}
+
+const HASHTAG_SETS = {
+  booth_renters: {
+    instagram: '#boothrental #salonlife #independentstylist #beautyentrepreneur #salonowner #hairstylistlife #btccuts #modernsalon #suitelife #beautybusiness',
+    linkedin: '#boothrental #beautyentrepreneur #salonlife #hairstylist',
+  },
+  new_clients: {
+    instagram: '#newhair #hairtransformation #hairgoals #salonlife #btccuts #modernsalon #haircolor #freshcut #naturalhair #haircare',
+    linkedin: '#salon #haircare #beauty #clientlove',
+  },
+  showcase: {
+    instagram: '#btccuts #hairinspo #hairtransformation #hairgoals #naturalhair #salonlife #modernsalon #haircolor #colorist #hairart',
+    linkedin: '#craftandskill #beautyprofessional #hairstylist #salonwork',
+  },
+  community: {
+    instagram: '#salonteam #beautycommunity #haircare #salonlife #tipsandtricks #behindthechair #hairadvice #beautytips #naturalhair',
+    linkedin: '#beauty #community #teamwork #salonsuccess',
+  },
 }
 
 function readBrandSettings() {
@@ -87,6 +107,11 @@ function addImageFromLibrary(content, libraryImageUrl) {
 
 export async function POST(request) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    if (!rateLimit(ip, 5)) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
+    }
+
     const formData = await request.formData()
     const employeeName = cleanText(formData.get('employeeName'), 100)
     const context = cleanText(formData.get('context'), 4000)
@@ -134,7 +159,8 @@ export async function POST(request) {
     const goalInfo = GOALS[goal]
     const exampleQuery = db.prepare(`
       SELECT gp.post_text, gp.variant, gp.likes, gp.comments, gp.shares,
-             AVG(pr.rating) AS avg_rating
+             AVG(pr.rating) AS avg_rating,
+             GROUP_CONCAT(pr.notes, ' | ') AS rating_notes
       FROM generated_posts gp
       LEFT JOIN post_ratings pr ON pr.post_id = gp.id
       WHERE gp.platform = ? AND gp.goal = ?
@@ -146,47 +172,57 @@ export async function POST(request) {
 
     const platformSections = platforms.map(platform => {
       const examples = exampleQuery.all(platform, goal)
+      const hashtagHint = HASHTAG_SETS[goal]?.[platform]
+        ? `\nSuggested hashtag pool (pick the most relevant): ${HASHTAG_SETS[goal][platform]}`
+        : ''
       const examplesText = examples.length
-        ? examples.map((example, index) => (
-          `Example ${index + 1} (${example.variant || 'balanced'}, rating ${Number(example.avg_rating || 0).toFixed(1)}):\n${example.post_text}`
-        )).join('\n\n')
+        ? examples.map((example, index) => {
+            const feedback = example.rating_notes
+              ? example.rating_notes.split(' | ').filter(Boolean).join('; ')
+              : ''
+            return `Example ${index + 1} (${example.variant || 'balanced'}, rating ${Number(example.avg_rating || 0).toFixed(1)})${feedback ? ` — team feedback: "${feedback}"` : ''}:\n${example.post_text}`
+          }).join('\n\n')
         : 'No proven examples yet. Establish a natural, memorable salon voice.'
       return `### ${platform}
-${PLATFORM_GUIDANCE[platform]}
+${PLATFORM_GUIDANCE[platform]}${hashtagHint}
 
 Past examples that earned strong ratings or engagement:
 ${examplesText}`
     }).join('\n\n')
 
-    const prompt = `You are the social media strategist for ${brand.salonName}.
+    const prompt = `You are the in-house social media strategist for ${brand.salonName}.
 
-Brand voice: ${brand.voice}
-Services: ${brand.services}
-Location: ${brand.location || 'Not specified'}
-Booking URL: ${brand.bookingUrl || 'Not specified'}
-Signature phrases: ${brand.signaturePhrases || 'None specified'}
-Never use these phrases: ${brand.avoidPhrases || 'Generic corporate filler'}
-Booth benefits: ${brand.boothBenefits}
+## Brand identity
+Voice: ${brand.voice}
+Services offered: ${brand.services}
+Location: ${brand.location || 'Not specified — keep location references general'}
+Booking URL: ${brand.bookingUrl || 'Not specified — omit booking links'}
+${brand.signaturePhrases ? `Signature phrases to weave in naturally: ${brand.signaturePhrases}` : ''}
+Phrases and claims to NEVER use: ${brand.avoidPhrases || 'generic corporate filler, vague superlatives'}
+${brand.boothBenefits ? `Booth renter benefits (use only for booth_renters goal): ${brand.boothBenefits}` : ''}
 
-Employee: ${employeeName}
+## This post
+Written by: ${employeeName} (write in their first-person voice)
 Goal: ${goalInfo.summary}
-Goal guidance: ${goalInfo.guidance}
-Post notes: ${context || 'No extra notes were provided. Keep claims conservative and do not invent details.'}
-${mediaUrl ? 'Media is attached. Refer only to details that are clearly visible or included in the notes.' : 'No media is attached.'}
+Strategy: ${goalInfo.guidance}
+Post notes from ${employeeName}: ${context || 'None provided — keep claims conservative and do not invent details.'}
+${mediaUrl ? 'Photo/video is attached. Reference only what is clearly visible or stated in the notes.' : 'No media attached — do not describe visuals.'}
 
+## Platform requirements
 ${platformSections}
 
-For every requested platform, write three genuinely different options:
-- balanced: polished, warm, and broadly useful
-- personal: conversational, story-led, and intimate
-- bold: a strong truthful hook with more energy
+## Instructions
+Write three genuinely distinct directions for every platform:
+- balanced: polished, warm, broadly appealing — a reliable safe bet
+- personal: conversational, story-driven, intimate — reads like a real person
+- bold: confident opener, higher energy, stronger hook — still 100% truthful
 
-Rules:
-- Write in first person as ${employeeName}.
-- Never invent prices, availability, credentials, results, or client quotes.
-- Avoid generic marketing filler.
-- Keep every option ready to publish.
-- Return only raw valid JSON.
+Hard rules:
+- First-person voice as ${employeeName} throughout
+- Never invent prices, availability, credentials, results, timelines, or client quotes
+- No generic filler phrases ("passionate about", "I take pride in", "elevate your look")
+- Every variant must be publish-ready as written
+- Return ONLY raw valid JSON — no markdown, no commentary
 
 Required JSON shape:
 ${JSON.stringify(Object.fromEntries(platforms.map(platform => [
