@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { cleanText, validateUpload } from '@/lib/validation'
+import { rateLimit } from '@/lib/rateLimit'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs'
@@ -106,6 +107,11 @@ function addImageFromLibrary(content, libraryImageUrl) {
 
 export async function POST(request) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    if (!rateLimit(ip, 5)) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
+    }
+
     const formData = await request.formData()
     const employeeName = cleanText(formData.get('employeeName'), 100)
     const context = cleanText(formData.get('context'), 4000)
