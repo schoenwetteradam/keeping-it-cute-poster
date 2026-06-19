@@ -41,7 +41,10 @@ db.exec(`
     media_url TEXT DEFAULT '',
     variant TEXT DEFAULT 'balanced',
     external_post_id TEXT DEFAULT '',
-    posted_at TEXT
+    posted_at TEXT,
+    scheduled_at TEXT,
+    publish_status TEXT DEFAULT 'draft',
+    retry_count INTEGER DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS post_ratings (
@@ -58,6 +61,15 @@ db.exec(`
     value TEXT NOT NULL DEFAULT '',
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS post_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    goal TEXT NOT NULL DEFAULT 'showcase',
+    context TEXT DEFAULT '',
+    platforms TEXT DEFAULT '["facebook","instagram","linkedin"]',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `)
 
 function ensureColumn(table, column, definition) {
@@ -71,5 +83,8 @@ ensureColumn('generated_posts', 'media_url', "TEXT DEFAULT ''")
 ensureColumn('generated_posts', 'variant', "TEXT DEFAULT 'balanced'")
 ensureColumn('generated_posts', 'external_post_id', "TEXT DEFAULT ''")
 ensureColumn('generated_posts', 'posted_at', 'TEXT')
+ensureColumn('generated_posts', 'scheduled_at', 'TEXT')
+ensureColumn('generated_posts', 'publish_status', "TEXT DEFAULT 'draft'")
+ensureColumn('generated_posts', 'retry_count', 'INTEGER DEFAULT 0')
 
 export default db
