@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { writeFileSync } from 'fs'
-import { join } from 'path'
+import { saveLinkedInToken } from '@/lib/linkedin'
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
@@ -41,12 +40,10 @@ export async function GET(request) {
       return NextResponse.redirect(new URL('/?linkedin=error', request.url))
     }
 
-    const tokenPath = join(process.cwd(), '.linkedin-token.json')
-    const tokenPayload = {
+    await saveLinkedInToken({
       access_token: tokenData.access_token,
       expires_at: Date.now() + (tokenData.expires_in || 5184000) * 1000,
-    }
-    writeFileSync(tokenPath, JSON.stringify(tokenPayload, null, 2))
+    })
 
     return NextResponse.redirect(new URL('/?linkedin=connected', request.url))
   } catch (err) {

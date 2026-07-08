@@ -4,22 +4,16 @@ import { publishPost, markPosted, markFailed } from '@/lib/publish'
 
 export async function POST() {
   try {
-    const due = db.prepare(`
-      SELECT * FROM generated_posts
-      WHERE publish_status = 'scheduled'
-        AND scheduled_at IS NOT NULL
-        AND scheduled_at <= datetime('now')
-        AND posted = 0
-    `).all()
+    const due = await db.posts.listDue()
 
     const results = []
     for (const post of due) {
       try {
         const result = await publishPost(post.platform, post.post_text, post.media_url)
-        markPosted(post.id, post.platform, result.postId)
+        await markPosted(post.id, post.platform, result.postId)
         results.push({ id: post.id, platform: post.platform, success: true, url: result.url })
       } catch (err) {
-        markFailed(post.id)
+        await markFailed(post.id)
         results.push({ id: post.id, platform: post.platform, success: false, error: err.message })
       }
     }
@@ -29,3 +23,6 @@ export async function POST() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+
+// Vercel Cron and other schedulers call endpoints with GET.
+export { POST as GET }

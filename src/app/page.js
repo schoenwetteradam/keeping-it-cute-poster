@@ -868,7 +868,10 @@ function Results({ posts, setPosts, postIds, mediaUrl, employeeName, linkedinCon
   const [scheduling, setScheduling] = useState({})
   const [scheduleAt, setScheduleAt] = useState({})
   const [scheduleStatus, setScheduleStatus] = useState({})
-  const isLocalhost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  // Media now lives on Cloudflare R2, so a proper upload always yields a
+  // public https URL. Anything else (e.g. a stale relative path) is a URL
+  // Meta's servers cannot fetch.
+  const mediaNotPublic = Boolean(mediaUrl) && !/^https:\/\//.test(mediaUrl)
 
   const updateText = (platform, variant, value) => {
     setPosts(c => ({ ...c, [platform]: { ...c[platform], [variant]: value } }))
@@ -1004,8 +1007,8 @@ function Results({ posts, setPosts, postIds, mediaUrl, employeeName, linkedinCon
                 </div>
               )}
 
-              {platform === 'instagram' && mediaUrl && isLocalhost ? (
-                <div className="mt-3"><Notice type="warning">Instagram cannot fetch a localhost image. Publish from the deployed app or use Copy for local testing.</Notice></div>
+              {platform === 'instagram' && mediaNotPublic ? (
+                <div className="mt-3"><Notice type="warning">Instagram needs a publicly reachable image URL. Re-upload the image so it is stored in the media library, then generate again.</Notice></div>
               ) : null}
               {platform === 'instagram' && !mediaUrl ? <div className="mt-3"><Notice type="warning">Instagram requires an image. Add media and generate again before publishing.</Notice></div> : null}
               {result?.success ? <div className="mt-3"><Notice type="success">Published. {result.url ? <a className="font-bold underline" href={result.url} target="_blank" rel="noreferrer">Open platform</a> : null}</Notice></div> : null}

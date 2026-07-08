@@ -1,34 +1,15 @@
 import { NextResponse } from 'next/server'
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
 import db from '@/lib/db'
+import { getLinkedInToken } from '@/lib/linkedin'
 
 export async function POST(request) {
   try {
     const { message, postId: generatedPostId } = await request.json()
 
-    const tokenPath = join(process.cwd(), '.linkedin-token.json')
-
-    if (!existsSync(tokenPath)) {
+    const token = await getLinkedInToken()
+    if (!token) {
       return NextResponse.json(
-        { error: 'LinkedIn not connected — visit /api/linkedin/auth to connect' },
-        { status: 401 }
-      )
-    }
-
-    const raw = readFileSync(tokenPath, 'utf8')
-    const token = JSON.parse(raw)
-
-    if (!token.access_token) {
-      return NextResponse.json(
-        { error: 'LinkedIn token missing — reconnect via /api/linkedin/auth' },
-        { status: 401 }
-      )
-    }
-
-    if (token.expires_at && Date.now() > token.expires_at) {
-      return NextResponse.json(
-        { error: 'LinkedIn token expired — reconnect via /api/linkedin/auth' },
+        { error: 'LinkedIn not connected or token expired — visit /api/linkedin/auth to connect' },
         { status: 401 }
       )
     }
@@ -75,9 +56,7 @@ export async function POST(request) {
 
     const postId = postData.id || postData['id']
     if (generatedPostId) {
-      db.prepare(
-        "UPDATE generated_posts SET posted = 1, external_post_id = ?, posted_at = datetime('now') WHERE id = ?"
-      ).run(postId || '', generatedPostId)
+      await db.posts.markExternalPosted(generatedPostId, postId || '')
     }
     return NextResponse.json({ success: true, postId, url: 'https://www.linkedin.com/feed/' })
   } catch (error) {

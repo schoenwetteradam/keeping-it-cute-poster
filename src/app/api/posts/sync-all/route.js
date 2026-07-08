@@ -8,9 +8,7 @@ export async function POST() {
       return NextResponse.json({ error: 'FACEBOOK_PAGE_ACCESS_TOKEN not configured' }, { status: 400 })
     }
 
-    const postedPosts = db.prepare(
-      "SELECT * FROM generated_posts WHERE posted = 1 AND facebook_post_id IS NOT NULL AND facebook_post_id != ''"
-    ).all()
+    const postedPosts = await db.posts.listPostedOnFacebook()
 
     const results = []
     for (const post of postedPosts) {
@@ -30,11 +28,7 @@ export async function POST() {
         const shares = data.shares?.count || 0
         const reach = data.insights?.data?.[0]?.values?.[0]?.value || 0
 
-        db.prepare(`
-          UPDATE generated_posts
-          SET likes = ?, comments = ?, shares = ?, reach = ?, engagement_updated_at = datetime('now')
-          WHERE id = ?
-        `).run(likes, comments, shares, reach, post.id)
+        await db.posts.updateEngagement(post.id, { likes, comments, shares, reach })
 
         results.push({ id: post.id, likes, comments, shares, reach })
       } catch (e) {
@@ -48,3 +42,6 @@ export async function POST() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+
+// Vercel Cron and other schedulers call endpoints with GET.
+export { POST as GET }

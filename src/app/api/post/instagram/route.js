@@ -66,9 +66,7 @@ export async function POST(request) {
     }
 
     if (generatedPostId) {
-      db.prepare(
-        "UPDATE generated_posts SET posted = 1, external_post_id = ?, posted_at = datetime('now') WHERE id = ?"
-      ).run(publishData.id, generatedPostId)
+      await db.posts.markExternalPosted(generatedPostId, publishData.id)
     }
     return NextResponse.json({
       success: true,

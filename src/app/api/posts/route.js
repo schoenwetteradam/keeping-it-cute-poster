@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 
 export async function POST(request) {
   try {
@@ -9,16 +9,18 @@ export async function POST(request) {
       return NextResponse.json({ error: 'posts array required' }, { status: 400 })
     }
 
-    const insert = db.prepare(`
-      INSERT INTO generated_posts (id, employee_name, platform, goal, post_text, context)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `)
-
-    const savedPosts = posts.map(p => {
-      const id = uuidv4()
-      insert.run(id, p.employeeName || '', p.platform || '', p.goal || '', p.postText || '', p.context || '')
-      return { id, platform: p.platform, employeeName: p.employeeName, goal: p.goal }
-    })
+    const rows = posts.map(p => ({
+      id: randomUUID(),
+      employee_name: p.employeeName || '',
+      platform: p.platform || '',
+      goal: p.goal || '',
+      post_text: p.postText || '',
+      context: p.context || '',
+    }))
+    await db.posts.insertMany(rows)
+    const savedPosts = rows.map(row => ({
+      id: row.id, platform: row.platform, employeeName: row.employee_name, goal: row.goal,
+    }))
 
     return NextResponse.json({ savedPosts })
   } catch (error) {
@@ -33,59 +35,14 @@ export async function GET(request) {
     const platform = searchParams.get('platform')
     const goal = searchParams.get('goal')
     const limit = parseInt(searchParams.get('limit') || '20', 10)
-
     const status = searchParams.get('status')
     const date = searchParams.get('date')
 
-    let where = 'WHERE 1=1'
-    const params = []
-    if (platform) { where += ' AND gp.platform = ?'; params.push(platform) }
-    if (goal) { where += ' AND gp.goal = ?'; params.push(goal) }
-    if (status === 'scheduled') { where += ' AND gp.publish_status = \'scheduled\' AND gp.posted = 0'; }
-    if (status === 'failed') { where += ' AND gp.publish_status = \'failed\' AND gp.posted = 0'; }
-    if (date) { where += ' AND substr(gp.created_at, 1, 10) = ?'; params.push(date) }
-
-    params.push(limit)
-
-    const posts = db.prepare(`
-      SELECT gp.*, AVG(pr.rating) as avg_rating, COUNT(pr.id) as rating_count
-      FROM generated_posts gp
-      LEFT JOIN post_ratings pr ON pr.post_id = gp.id
-      ${where}
-      GROUP BY gp.id
-      ORDER BY gp.created_at DESC
-      LIMIT ?
-    `).all(...params)
-
-    const summary = db.prepare(`
-      SELECT
-        COUNT(*) AS total_posts,
-        SUM(CASE WHEN posted = 1 THEN 1 ELSE 0 END) AS published_posts,
-        ROUND(AVG(NULLIF(likes + comments + shares, 0)), 1) AS avg_engagement,
-        ROUND(AVG(pr.avg_rating), 1) AS avg_rating
-      FROM generated_posts gp
-      LEFT JOIN (
-        SELECT post_id, AVG(rating) AS avg_rating
-        FROM post_ratings
-        GROUP BY post_id
-      ) pr ON pr.post_id = gp.id
-    `).get()
-
-    const performance = db.prepare(`
-      SELECT platform, goal, variant,
-        COUNT(*) AS post_count,
-        ROUND(AVG(likes + comments * 2 + shares * 3), 1) AS engagement_score,
-        ROUND(AVG(pr.avg_rating), 1) AS avg_rating
-      FROM generated_posts gp
-      LEFT JOIN (
-        SELECT post_id, AVG(rating) AS avg_rating
-        FROM post_ratings
-        GROUP BY post_id
-      ) pr ON pr.post_id = gp.id
-      GROUP BY platform, goal, variant
-      HAVING COUNT(*) > 0
-      ORDER BY engagement_score DESC, avg_rating DESC
-    `).all()
+    const [posts, summary, performance] = await Promise.all([
+      db.posts.list({ platform, goal, status, date, limit }),
+      db.posts.summary(),
+      db.posts.performance(),
+    ])
 
     return NextResponse.json({ posts, summary, performance })
   } catch (error) {
