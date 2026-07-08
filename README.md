@@ -10,8 +10,10 @@ R2. Nothing external ever talks to Postgres directly.
 - Persistent Salon Brand Brain for voice, services, booking details, and guardrails
 - Image-aware generation and shared media library
 - Direct Facebook, Instagram, and LinkedIn text publishing
-- Team ratings and engagement-based prompt learning
+- Scheduled publishing that runs itself (Vercel Cron or a systemd timer on the VM)
+- Team ratings and engagement-based prompt learning, refreshed daily
 - Performance summaries by platform, goal, and draft style
+- `/api/health` endpoint for uptime monitoring
 
 ## Architecture
 
@@ -46,8 +48,11 @@ Fill in `.env.local` with:
 - `SALON_API_URL`, `SALON_API_KEY`, `SALON_JWT_SECRET` — from the PostgREST/Caddy setup
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` — from your Cloudflare R2 bucket
 - `ADMIN_USER`, `ADMIN_PASSWORD` — basic auth for the app itself
+- `CRON_SECRET` — lets the scheduler call the publish/sync endpoints (see
+  `docs/postgres-api-setup.md`, step 10)
 
-Keep `.env.local` and `.linkedin-token.json` out of Git — they're already in `.gitignore`.
+Keep `.env.local` out of Git — it's already in `.gitignore`. The LinkedIn OAuth token is
+stored in the database, so nothing else needs to persist on the app host.
 
 ## Public URL Requirement
 

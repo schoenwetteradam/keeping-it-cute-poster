@@ -50,9 +50,11 @@ sudo -u postgres psql -f schema.sql
 ```
 
 That single file creates the `salon_app` database, the `authenticator` / `web_anon` /
-`salon_app_user` roles, the `salon` schema and its tables, the `generated_posts_enriched`
-read view, the `posts_summary` / `posts_performance` / `top_examples` / `mark_posted` /
-`mark_failed` RPC functions the app relies on, and all the grants.
+`salon_app_user` roles, the `salon` schema and its tables (including `app_state`, which
+stores the LinkedIn OAuth token and is deliberately unreadable by the anonymous role),
+the `generated_posts_enriched` read view, the `posts_summary` / `posts_performance` /
+`top_examples` / `mark_posted` / `mark_failed` RPC functions the app relies on, and all
+the grants.
 
 Before running it, change the placeholder password:
 
@@ -214,6 +216,50 @@ Uploaded photos/videos go to R2 instead of local disk (`src/lib/storage.js`):
    `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`.
 4. Your Cloudflare account ID is `R2_ACCOUNT_ID`; the bucket name is `R2_BUCKET`.
 
+## Step 10 — Automate scheduled publishing
+
+The app publishes scheduled posts when something calls `/api/schedule/process`, and
+refreshes Facebook engagement numbers via `/api/posts/sync-all`. Both accept
+`Authorization: Bearer $CRON_SECRET` (set `CRON_SECRET` in the app's env vars).
+
+**Option A — Vercel Cron (Pro plan).** `vercel.json` in the repo already declares the two
+cron jobs (every 15 minutes / daily). Set `CRON_SECRET` in Vercel's environment variables
+and Vercel sends it automatically. Note: the Hobby plan limits crons to once per day,
+which is too slow for scheduled posts — use option B there.
+
+**Option B — systemd timer on this VM (works on any plan).** The VM is already always-on;
+let it ping the app:
+
+```bash
+sudo tee /etc/systemd/system/salon-schedule.service > /dev/null <<'EOF'
+[Unit]
+Description=Publish due salon posts
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://your-app.vercel.app/api/schedule/process
+EOF
+
+sudo tee /etc/systemd/system/salon-schedule.timer > /dev/null <<'EOF'
+[Unit]
+Description=Run salon schedule processing every 10 minutes
+
+[Timer]
+OnCalendar=*:0/10
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now salon-schedule.timer
+systemctl list-timers salon-schedule.timer
+```
+
+Duplicate the pair with a daily `OnCalendar=06:00` for `/api/posts/sync-all` if you want
+engagement numbers refreshed automatically too.
+
 ## What you'll have at this point
 
 - Postgres reachable only from localhost on the VM — never exposed
@@ -224,6 +270,10 @@ Uploaded photos/videos go to R2 instead of local disk (`src/lib/storage.js`):
 - A shared API key gating all access
 - A systemd service that restarts itself if it crashes or the VM reboots
 - Media uploads served from Cloudflare R2 instead of local disk
+- LinkedIn's OAuth token stored in Postgres (`salon.app_state`), so it survives
+  serverless deploys and is invisible to the anonymous role
+- Scheduled posts publishing themselves and engagement stats refreshing on a timer
+- A public `/api/health` endpoint reporting whether the app can reach the database
 
 Set `SALON_API_URL`, `SALON_API_KEY`, `SALON_JWT_SECRET`, and the `R2_*` variables in
 Vercel's environment variables to match. See `.env.example` for the full list.

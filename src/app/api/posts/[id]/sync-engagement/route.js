@@ -3,7 +3,7 @@ import db from '@/lib/db'
 
 export async function POST(request, { params }) {
   try {
-    const { id } = params
+    const { id } = await params
     const post = await db.posts.getById(id)
 
     if (!post) {

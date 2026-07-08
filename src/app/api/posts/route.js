@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 
 export async function POST(request) {
   try {
@@ -10,7 +10,7 @@ export async function POST(request) {
     }
 
     const rows = posts.map(p => ({
-      id: uuidv4(),
+      id: randomUUID(),
       employee_name: p.employeeName || '',
       platform: p.platform || '',
       goal: p.goal || '',

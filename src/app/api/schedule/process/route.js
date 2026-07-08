@@ -23,3 +23,6 @@ export async function POST() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+
+// Vercel Cron and other schedulers call endpoints with GET.
+export { POST as GET }

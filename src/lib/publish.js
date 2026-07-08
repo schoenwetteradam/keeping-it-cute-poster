@@ -1,6 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
 import db from './db'
+import { getLinkedInToken } from './linkedin'
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v19.0'
 
@@ -52,11 +51,8 @@ async function publishToInstagram(postText, imageUrl) {
 }
 
 async function publishToLinkedIn(postText) {
-  const tokenPath = join(process.cwd(), '.linkedin-token.json')
-  if (!existsSync(tokenPath)) throw new Error('LinkedIn not connected. Visit /api/linkedin/auth to connect.')
-  const token = JSON.parse(readFileSync(tokenPath, 'utf8'))
-  if (!token.access_token) throw new Error('LinkedIn token missing. Reconnect via /api/linkedin/auth.')
-  if (token.expires_at && Date.now() > token.expires_at) throw new Error('LinkedIn token expired. Reconnect via /api/linkedin/auth.')
+  const token = await getLinkedInToken()
+  if (!token) throw new Error('LinkedIn not connected or token expired. Visit /api/linkedin/auth to connect.')
 
   const companyId = process.env.LINKEDIN_COMPANY_ID
   let author

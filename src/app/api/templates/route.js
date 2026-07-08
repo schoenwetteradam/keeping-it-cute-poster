@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import { cleanText } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,7 @@ export async function POST(request) {
     const { name, goal, context, platforms } = await request.json()
     if (!name) return NextResponse.json({ error: 'Template name is required.' }, { status: 400 })
     const template = await db.templates.insert({
-      id: uuidv4(),
+      id: randomUUID(),
       name: cleanText(name, 100),
       goal: goal || 'showcase',
       context: cleanText(context, 4000),

@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/schedule/process", "schedule": "*/15 * * * *" },
+    { "path": "/api/posts/sync-all", "schedule": "0 6 * * *" }
+  ]
+}

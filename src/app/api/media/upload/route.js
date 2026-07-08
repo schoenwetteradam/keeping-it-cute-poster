@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import db from '@/lib/db'
 import { uploadToR2 } from '@/lib/storage'
 import { validateUpload } from '@/lib/validation'
@@ -21,7 +21,7 @@ export async function POST(request) {
     const validationError = validateUpload(file)
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
-    const id = uuidv4()
+    const id = randomUUID()
     const filename = `media/${id}${ALLOWED_EXTENSIONS[file.type]}`
     const bytes = Buffer.from(await file.arrayBuffer())
     const url = await uploadToR2(filename, bytes, file.type)

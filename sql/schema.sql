@@ -98,6 +98,14 @@ CREATE TABLE salon.post_templates (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Server-side application state (OAuth tokens, etc.). Holds secrets, so
+-- web_anon's read access is revoked below — only salon_app_user can touch it.
+CREATE TABLE salon.app_state (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- 3. Read model -------------------------------------------------------------
 -- generated_posts joined with its average rating, used by the dashboard's
 -- list/schedule views so the API doesn't need arbitrary GROUP BY support.
@@ -215,6 +223,9 @@ GRANT SELECT ON ALL TABLES IN SCHEMA salon TO web_anon;
 GRANT SELECT ON salon.generated_posts_enriched TO salon_app_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA salon TO salon_app_user;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA salon TO salon_app_user;
+
+-- app_state stores secrets — anonymous requests must never read it.
+REVOKE ALL ON salon.app_state FROM web_anon;
 
 GRANT EXECUTE ON FUNCTION salon.posts_summary() TO web_anon, salon_app_user;
 GRANT EXECUTE ON FUNCTION salon.posts_performance() TO web_anon, salon_app_user;

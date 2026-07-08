@@ -4,7 +4,7 @@ import db from '@/lib/db'
 import { uploadToR2, keyFromUrl } from '@/lib/storage'
 import { cleanText, validateUpload } from '@/lib/validation'
 import { rateLimit } from '@/lib/rateLimit'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 
 const SUPPORTED_PLATFORMS = new Set(['facebook', 'instagram', 'linkedin'])
 
@@ -77,7 +77,7 @@ const UPLOAD_EXTENSIONS = {
 }
 
 async function saveUploadedMedia(file, bytes, employeeName) {
-  const id = uuidv4()
+  const id = randomUUID()
   const filename = `media/${id}${UPLOAD_EXTENSIONS[file.type]}`
   const url = await uploadToR2(filename, bytes, file.type)
   await db.media.insert({
@@ -222,7 +222,10 @@ ${JSON.stringify(Object.fromEntries(platforms.map(platform => [
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const message = await client.messages.create({
       model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-8',
-      max_tokens: 5000,
+      // Thinking tokens share this budget, so leave headroom beyond the
+      // JSON payload itself (3 platforms x 3 variants can run long).
+      max_tokens: 10000,
+      thinking: { type: 'adaptive' },
       messages: [{ role: 'user', content }],
     })
     const responseText = message.content.find(item => item.type === 'text')?.text || ''
@@ -237,7 +240,7 @@ ${JSON.stringify(Object.fromEntries(platforms.map(platform => [
       for (const variant of ['balanced', 'personal', 'bold']) {
         const postText = cleanText(posts?.[platform]?.[variant], 8000)
         if (!postText) continue
-        const id = uuidv4()
+        const id = randomUUID()
         rows.push({
           id, employee_name: employeeName, platform, goal, post_text: postText, context,
           media_url: mediaUrl, variant,

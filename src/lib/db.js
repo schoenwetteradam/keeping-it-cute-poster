@@ -156,6 +156,17 @@ const db = {
     }).then(first),
     remove: id => api(`/post_templates?id=eq.${id}`, { method: 'DELETE', write: true }),
   },
+
+  // Server-side state (OAuth tokens etc.). web_anon has no access to this
+  // table, so even reads go through the salon_app_user JWT.
+  appState: {
+    get: key => api(`/app_state?select=value&key=eq.${encodeURIComponent(key)}`, { write: true })
+      .then(rows => first(rows)?.value ?? null),
+    set: (key, value) => api('/app_state?on_conflict=key', {
+      method: 'POST', write: true, prefer: 'resolution=merge-duplicates',
+      body: [{ key, value, updated_at: new Date().toISOString() }],
+    }),
+  },
 }
 
 export default db
