@@ -41,11 +41,7 @@ export async function POST(request) {
     }
 
     if (postId) {
-      db.prepare(`
-        UPDATE generated_posts
-        SET posted = 1, facebook_post_id = ?, external_post_id = ?, posted_at = datetime('now')
-        WHERE id = ?
-      `).run(data.id, data.id, postId)
+      await db.posts.markFacebookPosted(postId, data.id)
     }
     return NextResponse.json({
       success: true,

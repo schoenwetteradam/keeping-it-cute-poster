@@ -1,13 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
+import { uploadToR2, keyFromUrl } from '@/lib/storage'
 import { cleanText, validateUpload } from '@/lib/validation'
 import { rateLimit } from '@/lib/rateLimit'
 import { v4 as uuidv4 } from 'uuid'
-import path from 'path'
-import fs from 'fs'
 
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads')
 const SUPPORTED_PLATFORMS = new Set(['facebook', 'instagram', 'linkedin'])
 
 const GOALS = {
@@ -54,7 +52,7 @@ const HASHTAG_SETS = {
   },
 }
 
-function readBrandSettings() {
+async function readBrandSettings() {
   const defaults = {
     salonName: 'Keeping It Cute Salon & Spa',
     voice: 'Warm, confident, welcoming, playful, specific, and never corporate.',
@@ -65,42 +63,43 @@ function readBrandSettings() {
     avoidPhrases: 'I am passionate about; I take pride in; elevate your look',
     boothBenefits: 'Supportive culture, flexible schedules, professional environment, and room to grow.',
   }
-  const rows = db.prepare('SELECT key, value FROM brand_settings').all()
+  const rows = await db.settings.getAll()
   for (const row of rows) defaults[row.key] = row.value
   return defaults
 }
 
-function saveUploadedMedia(file, bytes, employeeName) {
-  const extensions = {
-    'image/jpeg': '.jpg',
-    'image/png': '.png',
-    'image/webp': '.webp',
-    'video/mp4': '.mp4',
-    'video/quicktime': '.mov',
-  }
-  const id = uuidv4()
-  const filename = `${id}${extensions[file.type]}`
-  fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(bytes))
-  db.prepare(`
-    INSERT INTO media (id, filename, original_name, mime_type, size, uploaded_by)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, filename, file.name, file.type, file.size, employeeName)
-  return `/uploads/${filename}`
+const UPLOAD_EXTENSIONS = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
 }
 
-function addImageFromLibrary(content, libraryImageUrl) {
+async function saveUploadedMedia(file, bytes, employeeName) {
+  const id = uuidv4()
+  const filename = `media/${id}${UPLOAD_EXTENSIONS[file.type]}`
+  const url = await uploadToR2(filename, bytes, file.type)
+  await db.media.insert({
+    id, filename, original_name: file.name, mime_type: file.type, size: file.size, uploaded_by: employeeName,
+  })
+  return url
+}
+
+async function addImageFromLibrary(content, libraryImageUrl) {
   if (!libraryImageUrl) return
-  const filename = path.basename(libraryImageUrl)
-  const row = db.prepare('SELECT mime_type FROM media WHERE filename = ?').get(filename)
+  const key = keyFromUrl(libraryImageUrl)
+  const row = key ? await db.media.getByFilename(key) : null
   if (!row?.mime_type?.startsWith('image/')) return
-  const filepath = path.join(UPLOADS_DIR, filename)
-  if (!fs.existsSync(filepath)) return
+  const res = await fetch(libraryImageUrl)
+  if (!res.ok) return
+  const bytes = Buffer.from(await res.arrayBuffer())
   content.push({
     type: 'image',
     source: {
       type: 'base64',
       media_type: row.mime_type,
-      data: fs.readFileSync(filepath).toString('base64'),
+      data: bytes.toString('base64'),
     },
   })
 }
@@ -140,7 +139,7 @@ export async function POST(request) {
         return NextResponse.json({ error: validationError }, { status: 400 })
       }
       const bytes = await file.arrayBuffer()
-      mediaUrl = saveUploadedMedia(file, bytes, employeeName)
+      mediaUrl = await saveUploadedMedia(file, Buffer.from(bytes), employeeName)
       if (file.type.startsWith('image/')) {
         content.push({
           type: 'image',
@@ -152,26 +151,14 @@ export async function POST(request) {
         })
       }
     } else {
-      addImageFromLibrary(content, libraryImageUrl)
+      await addImageFromLibrary(content, libraryImageUrl)
     }
 
-    const brand = readBrandSettings()
+    const brand = await readBrandSettings()
     const goalInfo = GOALS[goal]
-    const exampleQuery = db.prepare(`
-      SELECT gp.post_text, gp.variant, gp.likes, gp.comments, gp.shares,
-             AVG(pr.rating) AS avg_rating,
-             GROUP_CONCAT(pr.notes, ' | ') AS rating_notes
-      FROM generated_posts gp
-      LEFT JOIN post_ratings pr ON pr.post_id = gp.id
-      WHERE gp.platform = ? AND gp.goal = ?
-      GROUP BY gp.id
-      HAVING avg_rating >= 4 OR (gp.likes + gp.comments * 2 + gp.shares * 3) >= 15
-      ORDER BY avg_rating DESC, (gp.likes + gp.comments * 2 + gp.shares * 3) DESC
-      LIMIT 3
-    `)
 
-    const platformSections = platforms.map(platform => {
-      const examples = exampleQuery.all(platform, goal)
+    const platformSections = (await Promise.all(platforms.map(async platform => {
+      const examples = await db.posts.topExamples(platform, goal, 3)
       const hashtagHint = HASHTAG_SETS[goal]?.[platform]
         ? `\nSuggested hashtag pool (pick the most relevant): ${HASHTAG_SETS[goal][platform]}`
         : ''
@@ -188,7 +175,7 @@ ${PLATFORM_GUIDANCE[platform]}${hashtagHint}
 
 Past examples that earned strong ratings or engagement:
 ${examplesText}`
-    }).join('\n\n')
+    }))).join('\n\n')
 
     const prompt = `You are the in-house social media strategist for ${brand.salonName}.
 
@@ -243,23 +230,23 @@ ${JSON.stringify(Object.fromEntries(platforms.map(platform => [
     if (!jsonMatch) throw new Error('The AI returned an invalid response. Please try again.')
     const posts = JSON.parse(jsonMatch[0])
 
-    const insert = db.prepare(`
-      INSERT INTO generated_posts
-        (id, employee_name, platform, goal, post_text, context, media_url, variant)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `)
     const postIds = {}
+    const rows = []
     for (const platform of platforms) {
       postIds[platform] = {}
       for (const variant of ['balanced', 'personal', 'bold']) {
         const postText = cleanText(posts?.[platform]?.[variant], 8000)
         if (!postText) continue
         const id = uuidv4()
-        insert.run(id, employeeName, platform, goal, postText, context, mediaUrl, variant)
+        rows.push({
+          id, employee_name: employeeName, platform, goal, post_text: postText, context,
+          media_url: mediaUrl, variant,
+        })
         postIds[platform][variant] = id
         posts[platform][variant] = postText
       }
     }
+    if (rows.length) await db.posts.insertMany(rows)
 
     return NextResponse.json({ posts, postIds, mediaUrl })
   } catch (error) {

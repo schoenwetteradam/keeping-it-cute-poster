@@ -104,14 +104,10 @@ export async function publishPost(platform, postText, imageUrl) {
   }
 }
 
-export function markPosted(postId, platform, externalId) {
-  if (platform === 'facebook') {
-    db.prepare(`UPDATE generated_posts SET posted=1, facebook_post_id=?, external_post_id=?, posted_at=datetime('now'), publish_status='published' WHERE id=?`).run(externalId, externalId, postId)
-  } else {
-    db.prepare(`UPDATE generated_posts SET posted=1, external_post_id=?, posted_at=datetime('now'), publish_status='published' WHERE id=?`).run(externalId || '', postId)
-  }
+export async function markPosted(postId, platform, externalId) {
+  await db.posts.markPosted(postId, platform, externalId)
 }
 
-export function markFailed(postId) {
-  db.prepare(`UPDATE generated_posts SET publish_status='failed', retry_count=retry_count+1 WHERE id=?`).run(postId)
+export async function markFailed(postId) {
+  await db.posts.markFailed(postId)
 }

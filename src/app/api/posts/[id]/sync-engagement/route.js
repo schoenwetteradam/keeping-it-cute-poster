@@ -4,7 +4,7 @@ import db from '@/lib/db'
 export async function POST(request, { params }) {
   try {
     const { id } = params
-    const post = db.prepare('SELECT * FROM generated_posts WHERE id = ?').get(id)
+    const post = await db.posts.getById(id)
 
     if (!post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
@@ -33,11 +33,7 @@ export async function POST(request, { params }) {
     const shares = data.shares?.count || 0
     const reach = data.insights?.data?.[0]?.values?.[0]?.value || 0
 
-    db.prepare(`
-      UPDATE generated_posts
-      SET likes = ?, comments = ?, shares = ?, reach = ?, engagement_updated_at = datetime('now')
-      WHERE id = ?
-    `).run(likes, comments, shares, reach, id)
+    await db.posts.updateEngagement(id, { likes, comments, shares, reach })
 
     return NextResponse.json({ success: true, likes, comments, shares, reach })
   } catch (error) {

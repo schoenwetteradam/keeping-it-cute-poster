@@ -8,9 +8,8 @@ export async function PATCH(request, { params }) {
     if (!postText) {
       return NextResponse.json({ error: 'Post text is required.' }, { status: 400 })
     }
-    const result = db.prepare('UPDATE generated_posts SET post_text = ? WHERE id = ?')
-      .run(postText, params.id)
-    if (!result.changes) {
+    const updated = await db.posts.updateText(params.id, postText)
+    if (!updated.length) {
       return NextResponse.json({ error: 'Post not found.' }, { status: 404 })
     }
     return NextResponse.json({ success: true, postText })

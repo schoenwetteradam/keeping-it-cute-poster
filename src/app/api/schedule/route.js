@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
-  const posts = db.prepare(`
-    SELECT gp.*, AVG(pr.rating) as avg_rating
-    FROM generated_posts gp
-    LEFT JOIN post_ratings pr ON pr.post_id = gp.id
-    WHERE gp.scheduled_at IS NOT NULL AND gp.posted = 0
-    GROUP BY gp.id
-    ORDER BY gp.scheduled_at ASC
-  `).all()
+  const posts = await db.posts.listScheduled()
   return NextResponse.json({ posts })
 }
 
@@ -19,7 +14,7 @@ export async function PATCH(request) {
     if (!postId) return NextResponse.json({ error: 'postId required' }, { status: 400 })
     if (!scheduledAt) return NextResponse.json({ error: 'scheduledAt required' }, { status: 400 })
 
-    db.prepare(`UPDATE generated_posts SET scheduled_at=?, publish_status='scheduled' WHERE id=?`).run(scheduledAt, postId)
+    await db.posts.setSchedule(postId, scheduledAt)
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -30,7 +25,7 @@ export async function DELETE(request) {
   try {
     const { postId } = await request.json()
     if (!postId) return NextResponse.json({ error: 'postId required' }, { status: 400 })
-    db.prepare(`UPDATE generated_posts SET scheduled_at=NULL, publish_status='draft' WHERE id=?`).run(postId)
+    await db.posts.clearSchedule(postId)
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

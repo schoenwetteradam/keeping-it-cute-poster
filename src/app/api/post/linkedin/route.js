@@ -75,9 +75,7 @@ export async function POST(request) {
 
     const postId = postData.id || postData['id']
     if (generatedPostId) {
-      db.prepare(
-        "UPDATE generated_posts SET posted = 1, external_post_id = ?, posted_at = datetime('now') WHERE id = ?"
-      ).run(postId || '', generatedPostId)
+      await db.posts.markExternalPosted(generatedPostId, postId || '')
     }
     return NextResponse.json({ success: true, postId, url: 'https://www.linkedin.com/feed/' })
   } catch (error) {

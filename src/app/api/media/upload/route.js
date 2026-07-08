@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
-import path from 'path'
-import fs from 'fs'
 import db from '@/lib/db'
+import { uploadToR2 } from '@/lib/storage'
 import { validateUpload } from '@/lib/validation'
 
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads')
+const ALLOWED_EXTENSIONS = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+}
 
 export async function POST(request) {
   try {
@@ -16,34 +21,24 @@ export async function POST(request) {
     const validationError = validateUpload(file)
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
-    const allowedExtensions = {
-      'image/jpeg': '.jpg',
-      'image/png': '.png',
-      'image/webp': '.webp',
-      'video/mp4': '.mp4',
-      'video/quicktime': '.mov',
-    }
-    const ext = allowedExtensions[file.type]
     const id = uuidv4()
-    const filename = `${id}${ext}`
-    const filepath = path.join(UPLOADS_DIR, filename)
+    const filename = `media/${id}${ALLOWED_EXTENSIONS[file.type]}`
+    const bytes = Buffer.from(await file.arrayBuffer())
+    const url = await uploadToR2(filename, bytes, file.type)
 
-    const bytes = await file.arrayBuffer()
-    fs.writeFileSync(filepath, Buffer.from(bytes))
-
-    db.prepare(`
-      INSERT INTO media (id, filename, original_name, mime_type, size, uploaded_by)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, filename, file.name, file.type, file.size, uploadedBy)
+    const media = await db.media.insert({
+      id, filename, original_name: file.name, mime_type: file.type, size: file.size, uploaded_by: uploadedBy,
+    })
 
     return NextResponse.json({
-      id, filename,
-      originalName: file.name,
-      mimeType: file.type,
-      size: file.size,
-      uploadedBy,
-      createdAt: new Date().toISOString(),
-      url: `/uploads/${filename}`,
+      id: media.id,
+      filename: media.filename,
+      originalName: media.original_name,
+      mimeType: media.mime_type,
+      size: media.size,
+      uploadedBy: media.uploaded_by,
+      createdAt: media.created_at,
+      url,
     })
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
