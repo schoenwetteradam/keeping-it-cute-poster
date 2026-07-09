@@ -180,15 +180,22 @@ You should get `[]` again, this time over HTTPS, from the public internet.
 
 ## Step 8 — Lock down access with a shared API key
 
-Add a shared-secret header check in Caddy so only your app can call the API at all:
+Add a shared-secret header check in Caddy so only your app can call the API at all.
+The two `handle` blocks are required — a bare `respond 401` fallback next to
+`reverse_proxy @authorized` does NOT work, because Caddy sorts `respond` before
+`reverse_proxy` internally and would return 401 for every request, valid key or not
+(verified against a live Caddy):
 
 ```
 api.yourdomain.com {
-    @authorized {
-        header X-API-Key "YOUR_LONG_RANDOM_SECRET_HERE"
+    @authorized header X-API-Key "YOUR_LONG_RANDOM_SECRET_HERE"
+
+    handle @authorized {
+        reverse_proxy 127.0.0.1:3000
     }
-    reverse_proxy @authorized 127.0.0.1:3000
-    respond 401
+    handle {
+        respond 401
+    }
 }
 ```
 
