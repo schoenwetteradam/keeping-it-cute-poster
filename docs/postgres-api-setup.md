@@ -43,64 +43,120 @@ this setup.
 
 ## Step 3 — Create the database, roles, and schema
 
-Copy `sql/schema.sql` from this repo to the VM, then run it as the postgres superuser:
+Clone this repo onto the VM (or copy just `sql/schema.sql` over), `cd` into it, then set
+your database password as a shell variable — **type it yourself, don't paste a
+placeholder** — and substitute it into the file:
 
 ```bash
-sudo -u postgres psql -f schema.sql
+git clone https://github.com/schoenwetteradam/keeping-it-cute-poster.git
+cd keeping-it-cute-poster
+DB_PASSWORD=your_real_generated_password_here
+sed -i "s/CHANGE_ME_STRONG_PASSWORD/$DB_PASSWORD/" sql/schema.sql
 ```
 
-That single file creates the `salon_app` database, the `authenticator` / `web_anon` /
-`salon_app_user` roles, the `salon` schema and its tables (including `app_state`, which
-stores the LinkedIn OAuth token and is deliberately unreadable by the anonymous role),
-the `generated_posts_enriched` read view, the `posts_summary` / `posts_performance` /
-`top_examples` / `mark_posted` / `mark_failed` RPC functions the app relies on, and all
+Run it as the postgres superuser — pipe it in with `<` rather than `-f`. This matters on
+Amazon Linux (and anywhere else `ec2-user`'s home directory isn't world-readable): `sudo
+-u postgres psql -f sql/schema.sql` fails with `Permission denied` because the `postgres`
+OS user can't traverse into your home folder to open the file, even given an absolute
+path. Piping via `<` sidesteps that — your own shell opens the file (which you own) and
+hands the already-open stream to the `postgres`-user process, so no cross-user filesystem
+access is needed:
+
+```bash
+sudo -u postgres psql -v ON_ERROR_STOP=1 < sql/schema.sql
+sudo -u postgres psql -d salon_app -c "\dt salon.*"
+```
+
+Expect 6 tables: `app_state`, `brand_settings`, `generated_posts`, `media`,
+`post_ratings`, `post_templates`. `app_state` stores the LinkedIn OAuth token and is
+deliberately unreadable by the anonymous role. The same file also creates the
+`generated_posts_enriched` read view and the `posts_summary` / `posts_performance` /
+`top_examples` / `mark_posted` / `mark_failed` RPC functions the app relies on, plus all
 the grants.
 
-Before running it, change the placeholder password:
+**If it fails with `extension "pgcrypto" is not available`:** your Postgres install
+doesn't include the contrib package that provides it (common on a fresh Amazon Linux
+install). Install the matching version's contrib package, then re-run the two commands
+above — you'll need to drop the partially-created database and roles first since the
+script stopped partway through:
 
-```sql
-ALTER ROLE authenticator WITH PASSWORD 'CHANGE_ME_STRONG_PASSWORD';
+```bash
+sudo dnf install -y $(rpm -qa | grep -oP 'postgresql\d+-server' | sed 's/-server/-contrib/')
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS salon_app;"
+sudo -u postgres psql -c "DROP ROLE IF EXISTS authenticator;"
+sudo -u postgres psql -c "DROP ROLE IF EXISTS web_anon;"
+sudo -u postgres psql -c "DROP ROLE IF EXISTS salon_app_user;"
+sudo -u postgres psql -v ON_ERROR_STOP=1 < sql/schema.sql
 ```
 
-(or edit `CREATE ROLE authenticator ... PASSWORD '...'` in the file before running it).
+(On Debian/Ubuntu instead of Amazon Linux, the equivalent package is
+`postgresql-contrib`, installable with `apt`.)
 
 ## Step 4 — Install PostgREST
 
+Fetch the current release's real filename from GitHub's API instead of hardcoding one —
+the naming has changed between releases (older versions used `-x64`, current ones use
+`-x86-64`), so a fixed URL 404s once the release moves on:
+
 ```bash
 cd /opt
-sudo curl -L -o postgrest.tar.xz https://github.com/PostgREST/postgrest/releases/latest/download/postgrest-linux-static-x64.tar.xz
+URL=$(curl -s https://api.github.com/repos/PostgREST/postgrest/releases/latest \
+  | grep browser_download_url | grep 'linux-static-x86-64' | grep -oP 'https://\S+(?=")')
+echo "Downloading: $URL"
+sudo curl -L -o postgrest.tar.xz "$URL"
 sudo tar -xf postgrest.tar.xz
 sudo mv postgrest /usr/local/bin/
-postgrest --help   # confirms it's installed
+postgrest --version   # confirms it's installed
+```
+
+If `$URL` comes out empty — most likely you're on an ARM/Graviton instance (check with
+`uname -m`; this build only covers `x86_64`) — list every asset in the release and pick
+the right one by hand:
+
+```bash
+curl -s https://api.github.com/repos/PostgREST/postgrest/releases/latest | grep browser_download_url
 ```
 
 ## Step 5 — Generate a JWT secret and configure PostgREST
 
 This secret signs tokens that let requests act as `salon_app_user` instead of just
 `web_anon`. The Next.js app holds this secret as `SALON_JWT_SECRET` and uses it to
-authenticate writes (see `src/lib/db.js`).
+authenticate writes (see `src/lib/db.js`). Generate it wherever's convenient — on the VM,
+or on your own machine:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Copy that output — you'll need it twice (once here, once as `SALON_JWT_SECRET` in Vercel's
-env vars later).
+(Windows doesn't ship `openssl`. In PowerShell, use `Git Bash` instead if you have Git for
+Windows installed — it bundles `openssl` — or run this pure-PowerShell equivalent:
+`$b=New-Object byte[] 32; (New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($b); [Convert]::ToBase64String($b)`)
+
+Back on the VM, set it as a shell variable — **type/paste your real secret value, not the
+word `JWT_SECRET`** — and reuse `$DB_PASSWORD` from Step 3 (still set if you're in the same
+terminal session; re-export it if not):
+
+```bash
+JWT_SECRET=paste_your_real_jwt_secret_here
+```
 
 Create the config file:
 
 ```bash
-sudo nano /etc/postgrest.conf
-```
-
-```ini
-db-uri = "postgres://authenticator:CHANGE_ME_STRONG_PASSWORD@localhost:5432/salon_app"
+sudo tee /etc/postgrest.conf > /dev/null <<EOF
+db-uri = "postgres://authenticator:$DB_PASSWORD@localhost:5432/salon_app"
 db-schemas = "salon"
 db-anon-role = "web_anon"
-jwt-secret = "PASTE_YOUR_OPENSSL_SECRET_HERE"
+jwt-secret = "$JWT_SECRET"
 server-port = 3000
 server-host = "127.0.0.1"
+EOF
+sudo chown postgres:postgres /etc/postgrest.conf
+sudo chmod 600 /etc/postgrest.conf
 ```
+
+Save `$JWT_SECRET`'s value somewhere — you'll need it again as `SALON_JWT_SECRET` in
+Vercel's env vars later.
 
 `server-host = 127.0.0.1` is important — PostgREST only listens locally. The reverse proxy
 (next step) is the only thing that talks to it, and the reverse proxy is the only thing
@@ -109,10 +165,7 @@ exposed to the internet.
 ## Step 6 — Run PostgREST as a systemd service
 
 ```bash
-sudo nano /etc/systemd/system/postgrest.service
-```
-
-```ini
+sudo tee /etc/systemd/system/postgrest.service > /dev/null <<'EOF'
 [Unit]
 Description=PostgREST API server
 After=postgresql.service network.target
@@ -125,6 +178,7 @@ User=postgres
 
 [Install]
 WantedBy=multi-user.target
+EOF
 ```
 
 ```bash
@@ -180,15 +234,22 @@ You should get `[]` again, this time over HTTPS, from the public internet.
 
 ## Step 8 — Lock down access with a shared API key
 
-Add a shared-secret header check in Caddy so only your app can call the API at all:
+Add a shared-secret header check in Caddy so only your app can call the API at all.
+The two `handle` blocks are required — a bare `respond 401` fallback next to
+`reverse_proxy @authorized` does NOT work, because Caddy sorts `respond` before
+`reverse_proxy` internally and would return 401 for every request, valid key or not
+(verified against a live Caddy):
 
 ```
 api.yourdomain.com {
-    @authorized {
-        header X-API-Key "YOUR_LONG_RANDOM_SECRET_HERE"
+    @authorized header X-API-Key "YOUR_LONG_RANDOM_SECRET_HERE"
+
+    handle @authorized {
+        reverse_proxy 127.0.0.1:3000
     }
-    reverse_proxy @authorized 127.0.0.1:3000
-    respond 401
+    handle {
+        respond 401
+    }
 }
 ```
 
