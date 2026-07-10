@@ -69,7 +69,15 @@ CREATE TABLE salon.generated_posts (
   posted_at TIMESTAMPTZ,
   scheduled_at TIMESTAMPTZ,
   publish_status TEXT DEFAULT 'draft',
-  retry_count INTEGER DEFAULT 0
+  retry_count INTEGER DEFAULT 0,
+  -- Real-world funnel for goal='booth_renters' posts: did this post lead to
+  -- an actual inquiry / tour / signed renter? Distinct from likes/comments —
+  -- this is the business outcome, tracked by whoever fields the response.
+  renter_outcome TEXT,
+  renter_outcome_notes TEXT DEFAULT '',
+  renter_outcome_at TIMESTAMPTZ,
+  CONSTRAINT generated_posts_renter_outcome_check
+    CHECK (renter_outcome IS NULL OR renter_outcome IN ('inquiry', 'tour_scheduled', 'signed'))
 );
 
 CREATE TABLE salon.post_ratings (
@@ -217,6 +225,46 @@ LANGUAGE sql AS $$
   RETURNING *;
 $$;
 
+-- Real-world booth-renter funnel: how many booth_renters posts turned into
+-- an actual inquiry, a scheduled tour, or a signed renter.
+CREATE FUNCTION salon.booth_renter_funnel()
+RETURNS TABLE (
+  total_posts BIGINT,
+  inquiries BIGINT,
+  tours_scheduled BIGINT,
+  signed BIGINT
+) LANGUAGE sql STABLE AS $$
+  SELECT
+    COUNT(*) AS total_posts,
+    COUNT(*) FILTER (WHERE renter_outcome IN ('inquiry', 'tour_scheduled', 'signed')) AS inquiries,
+    COUNT(*) FILTER (WHERE renter_outcome IN ('tour_scheduled', 'signed')) AS tours_scheduled,
+    COUNT(*) FILTER (WHERE renter_outcome = 'signed') AS signed
+  FROM salon.generated_posts
+  WHERE goal = 'booth_renters';
+$$;
+
+-- Same funnel, broken down by platform/variant, to see which style of
+-- booth-renter post actually converts to real inquiries — not just likes.
+CREATE FUNCTION salon.booth_renter_performance()
+RETURNS TABLE (
+  platform TEXT,
+  variant TEXT,
+  post_count BIGINT,
+  inquiries BIGINT,
+  signed BIGINT
+) LANGUAGE sql STABLE AS $$
+  SELECT
+    platform, variant,
+    COUNT(*) AS post_count,
+    COUNT(*) FILTER (WHERE renter_outcome IN ('inquiry', 'tour_scheduled', 'signed')) AS inquiries,
+    COUNT(*) FILTER (WHERE renter_outcome = 'signed') AS signed
+  FROM salon.generated_posts
+  WHERE goal = 'booth_renters'
+  GROUP BY platform, variant
+  HAVING COUNT(*) > 0
+  ORDER BY signed DESC, inquiries DESC;
+$$;
+
 -- 5. Grants -------------------------------------------------------------
 
 GRANT SELECT ON ALL TABLES IN SCHEMA salon TO web_anon;
@@ -232,3 +280,5 @@ GRANT EXECUTE ON FUNCTION salon.posts_performance() TO web_anon, salon_app_user;
 GRANT EXECUTE ON FUNCTION salon.top_examples(TEXT, TEXT, INT) TO web_anon, salon_app_user;
 GRANT EXECUTE ON FUNCTION salon.mark_posted(UUID, TEXT, TEXT) TO salon_app_user;
 GRANT EXECUTE ON FUNCTION salon.mark_failed(UUID) TO salon_app_user;
+GRANT EXECUTE ON FUNCTION salon.booth_renter_funnel() TO web_anon, salon_app_user;
+GRANT EXECUTE ON FUNCTION salon.booth_renter_performance() TO web_anon, salon_app_user;

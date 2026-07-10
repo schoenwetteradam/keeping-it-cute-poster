@@ -38,13 +38,15 @@ export async function GET(request) {
     const status = searchParams.get('status')
     const date = searchParams.get('date')
 
-    const [posts, summary, performance] = await Promise.all([
+    const [posts, summary, performance, boothRenterFunnel, boothRenterPerformance] = await Promise.all([
       db.posts.list({ platform, goal, status, date, limit }),
       db.posts.summary(),
       db.posts.performance(),
+      db.posts.boothRenterFunnel(),
+      db.posts.boothRenterPerformance(),
     ])
 
-    return NextResponse.json({ posts, summary, performance })
+    return NextResponse.json({ posts, summary, performance, boothRenterFunnel, boothRenterPerformance })
   } catch (error) {
     console.error('List posts error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
