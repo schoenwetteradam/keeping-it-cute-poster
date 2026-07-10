@@ -132,6 +132,17 @@ const db = {
       method: 'PATCH', write: true,
       body: { posted: true, external_post_id: externalId, posted_at: new Date().toISOString() },
     }),
+
+    setRenterOutcome: (id, outcome, notes) => api(`/generated_posts?id=eq.${id}`, {
+      method: 'PATCH', write: true, prefer: 'return=representation',
+      body: {
+        renter_outcome: outcome,
+        renter_outcome_notes: notes || '',
+        renter_outcome_at: outcome ? new Date().toISOString() : null,
+      },
+    }),
+    boothRenterFunnel: () => api('/rpc/booth_renter_funnel', { method: 'POST', body: {} }).then(first),
+    boothRenterPerformance: () => api('/rpc/booth_renter_performance', { method: 'POST', body: {} }),
   },
 
   ratings: {

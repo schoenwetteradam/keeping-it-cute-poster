@@ -101,6 +101,60 @@ function RatingCard({ postId, employeeName }) {
   )
 }
 
+const RENTER_OUTCOMES = [
+  { id: 'inquiry', label: 'Got an inquiry' },
+  { id: 'tour_scheduled', label: 'Tour scheduled' },
+  { id: 'signed', label: 'Renter signed!' },
+]
+
+function RenterOutcomeControl({ postId, initialOutcome = null }) {
+  const [current, setCurrent] = useState(initialOutcome)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!postId) return null
+
+  const setOutcome = async outcomeId => {
+    const next = current === outcomeId ? null : outcomeId
+    setSaving(true)
+    setError('')
+    try {
+      await api(`/api/posts/${postId}/renter-outcome`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outcome: next }),
+      })
+      setCurrent(next)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-amber-100 pt-3">
+      <p className="mb-2 text-xs font-semibold text-slate-500">Real-world outcome — did this bring in a renter?</p>
+      <div className="flex flex-wrap gap-2">
+        {RENTER_OUTCOMES.map(o => (
+          <button
+            key={o.id}
+            type="button"
+            disabled={saving}
+            onClick={() => setOutcome(o.id)}
+            className={`rounded-full px-3 py-1.5 text-xs font-bold transition disabled:opacity-50 ${
+              current === o.id ? 'bg-amber-500 text-white' : 'border border-amber-200 text-amber-700 hover:bg-amber-50'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+    </div>
+  )
+}
+
 function MediaPreview({ item, className = '' }) {
   if (!item) return null
   const type = item.mime_type || item.type || ''
@@ -522,6 +576,8 @@ function InsightsTab() {
 
   const summary = data.summary || {}
   const recommendation = data.performance?.[0]
+  const funnel = data.boothRenterFunnel || {}
+  const funnelPerformance = data.boothRenterPerformance || []
   const cards = [
     ['Drafts created', summary.total_posts || 0],
     ['Published', summary.published_posts || 0],
@@ -546,6 +602,39 @@ function InsightsTab() {
         </Notice>
       ) : (
         <Notice>Rate and publish more drafts to unlock evidence-based recommendations.</Notice>
+      )}
+
+      {funnel.total_posts > 0 ? (
+        <section className={panelClass}>
+          <h2 className="mb-1 font-bold text-slate-900">Booth Renter Funnel</h2>
+          <p className="mb-4 text-sm text-slate-500">Real-world outcomes from &quot;Attract Booth Renters&quot; posts — not just likes.</p>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              ['Posts', funnel.total_posts || 0],
+              ['Inquiries', funnel.inquiries || 0],
+              ['Tours scheduled', funnel.tours_scheduled || 0],
+              ['Renters signed', funnel.signed || 0],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-center">
+                <p className="text-xl font-black text-amber-700">{value}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-600">{label}</p>
+              </div>
+            ))}
+          </div>
+          {funnelPerformance.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What&apos;s actually converting</p>
+              {funnelPerformance.map((row, i) => (
+                <div key={i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm">
+                  <span className="font-semibold text-slate-700">{row.variant} · {row.platform}</span>
+                  <span className="text-slate-500">{row.post_count} posts · {row.inquiries} inquiries · {row.signed} signed</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : (
+        <Notice>No &quot;Attract Booth Renters&quot; posts yet — generate one to start tracking real-world renter outcomes.</Notice>
       )}
 
       {scheduled.length > 0 && (
@@ -627,6 +716,7 @@ function InsightsTab() {
                 <span>{post.shares || 0} shares</span>
                 <span>{post.avg_rating ? `${Number(post.avg_rating).toFixed(1)}/5 rating` : 'Not rated'}</span>
               </div>
+              {post.goal === 'booth_renters' ? <RenterOutcomeControl postId={post.id} initialOutcome={post.renter_outcome} /> : null}
             </article>
           ))}
           {data.posts?.length === 0 ? <p className="text-sm text-slate-400">No drafts have been generated yet.</p> : null}
@@ -733,6 +823,7 @@ function HistoryTab() {
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{post.post_text?.slice(0, 200)}{post.post_text?.length > 200 ? '...' : ''}</p>
                 {post.avg_rating ? <p className="mt-2 text-xs text-amber-600">{'★'.repeat(Math.round(post.avg_rating))} {Number(post.avg_rating).toFixed(1)}/5</p> : null}
+                {post.goal === 'booth_renters' ? <RenterOutcomeControl postId={post.id} initialOutcome={post.renter_outcome} /> : null}
               </article>
             ))}
           </div>
@@ -752,8 +843,14 @@ function HistoryTab() {
                   <span>{post.created_at?.slice(0, 10)}</span><span>/</span>
                   <span>{post.platform}</span><span>/</span><span>{post.variant}</span>
                   {post.posted ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700 normal-case">Published</span> : null}
+                  {post.goal === 'booth_renters' && post.renter_outcome ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 normal-case">
+                      {RENTER_OUTCOMES.find(o => o.id === post.renter_outcome)?.label}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-2 text-sm text-slate-700">{post.post_text?.slice(0, 140)}{post.post_text?.length > 140 ? '...' : ''}</p>
+                {post.goal === 'booth_renters' ? <RenterOutcomeControl postId={post.id} initialOutcome={post.renter_outcome} /> : null}
               </article>
             ))}
           </div>
@@ -1015,6 +1112,7 @@ function Results({ posts, setPosts, postIds, mediaUrl, employeeName, linkedinCon
               {result?.error ? <div className="mt-3"><Notice type="error">{result.error}</Notice></div> : null}
 
               <RatingCard postId={postIds?.[platform]?.[variant]} employeeName={employeeName} />
+              {goal === 'booth_renters' ? <RenterOutcomeControl postId={postIds?.[platform]?.[variant]} /> : null}
             </div>
           </section>
         )
