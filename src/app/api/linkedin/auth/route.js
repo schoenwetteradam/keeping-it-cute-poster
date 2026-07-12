@@ -17,7 +17,7 @@ export async function GET() {
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'r_liteprofile w_member_social r_organization_social w_organization_social',
+    scope: 'w_member_social r_organization_social w_organization_social',
     state,
   })
 
