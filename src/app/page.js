@@ -8,7 +8,8 @@ const PLATFORMS = [
   { id: 'linkedin', label: 'LinkedIn', color: 'bg-sky-700' },
 ]
 
-const GOALS = [
+// Shown until /api/goals resolves (or if it fails) so the dropdown is never empty.
+const FALLBACK_GOALS = [
   { id: 'booth_renters', label: 'Attract Booth Renters', description: 'Reach independent beauty professionals looking for their next salon home.' },
   { id: 'new_clients', label: 'Attract New Clients', description: 'Help potential clients picture the service, result, and experience.' },
   { id: 'showcase', label: 'Showcase My Work', description: 'Share a transformation, technique, or service without a hard sell.' },
@@ -604,7 +605,187 @@ function SettingsTab() {
         </div>
         <p className="mt-4 text-xs text-slate-400">LinkedIn uses OAuth — connect via the LinkedIn button on any post draft.</p>
       </section>
+
+      <GoalsManager />
     </div>
+  )
+}
+
+function GoalEditor({ goal, onSave, onCancel }) {
+  const [label, setLabel] = useState(goal.label)
+  const [description, setDescription] = useState(goal.description)
+  const [aiGuidance, setAiGuidance] = useState(goal.ai_guidance)
+  const [hashtagsInstagram, setHashtagsInstagram] = useState(goal.hashtags_instagram)
+  const [hashtagsLinkedin, setHashtagsLinkedin] = useState(goal.hashtags_linkedin)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const save = async () => {
+    if (!label.trim()) { setError('Label is required.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await onSave({ label, description, aiGuidance, hashtagsInstagram, hashtagsLinkedin })
+    } catch (err) {
+      setError(err.message)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border border-pink-100 bg-white p-3">
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Label</span>
+        <input value={label} onChange={e => setLabel(e.target.value)} className={inputClass} />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Description (shown under the dropdown on Create)</span>
+        <input value={description} onChange={e => setDescription(e.target.value)} className={inputClass} />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">AI guidance — what should this type of post do, and how should it sound?</span>
+        <textarea rows={2} value={aiGuidance} onChange={e => setAiGuidance(e.target.value)} className={inputClass} />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-slate-600">Instagram hashtag pool</span>
+          <input value={hashtagsInstagram} onChange={e => setHashtagsInstagram(e.target.value)} className={inputClass} placeholder="#salonlife #btccuts ..." />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-slate-600">LinkedIn hashtag pool</span>
+          <input value={hashtagsLinkedin} onChange={e => setHashtagsLinkedin(e.target.value)} className={inputClass} placeholder="#beauty #hairstylist ..." />
+        </label>
+      </div>
+      {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
+      <div className="flex gap-2">
+        <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function NewGoalForm({ onCreate, onCancel }) {
+  const [label, setLabel] = useState('')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const create = async () => {
+    if (!label.trim()) { setError('Label is required.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await onCreate({ label: label.trim(), description: description.trim() })
+    } catch (err) {
+      setError(err.message)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border border-pink-200 bg-white p-3">
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Label</span>
+        <input value={label} onChange={e => setLabel(e.target.value)} className={inputClass} placeholder="e.g. Holiday Promo" />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Description (shown under the dropdown on Create)</span>
+        <input value={description} onChange={e => setDescription(e.target.value)} className={inputClass} placeholder="e.g. Promote seasonal specials and gift cards" />
+      </label>
+      <p className="text-xs text-slate-400">You can add AI guidance and hashtags after creating it.</p>
+      {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
+      <div className="flex gap-2">
+        <button type="button" onClick={create} disabled={saving} className="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+          {saving ? 'Adding...' : 'Add goal'}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function GoalsManager() {
+  const [goals, setGoals] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api('/api/goals').then(d => setGoals(d.goals || [])).catch(err => setError(err.message))
+  }, [])
+
+  const saveGoal = async (id, patch) => {
+    const data = await api(`/api/goals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+    setGoals(gs => gs.map(g => g.id === id ? data.goal : g))
+    setEditingId(null)
+  }
+
+  const createGoal = async payload => {
+    const data = await api('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    setGoals(gs => [...gs, data.goal])
+    setCreating(false)
+  }
+
+  const removeGoal = async id => {
+    setDeletingId(id)
+    try {
+      await api(`/api/goals/${id}`, { method: 'DELETE' })
+      setGoals(gs => gs.filter(g => g.id !== id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  if (!goals) return <section className={panelClass}><p className="text-sm text-slate-400">Loading content goals...</p></section>
+
+  return (
+    <section className={panelClass}>
+      <h2 className="mb-1 text-lg font-bold text-slate-900">Content Goals</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        These drive the &quot;Post goal&quot; dropdown on Create and shape how the AI writes for each one.
+        The four built-in goals can be edited but not deleted. Changes appear on Create after a page refresh.
+      </p>
+      {error ? <div className="mb-3"><Notice type="error">{error}</Notice></div> : null}
+      <div className="space-y-2">
+        {goals.map(g => (
+          <div key={g.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {g.label}
+                  {g.is_builtin ? <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-500">Built-in</span> : null}
+                </p>
+                <p className="text-xs text-slate-400">{g.description}</p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button type="button" onClick={() => setEditingId(editingId === g.id ? null : g.id)} className="rounded-lg border border-pink-200 px-3 py-1.5 text-xs font-bold text-pink-700 hover:bg-pink-50">
+                  {editingId === g.id ? 'Close' : 'Edit'}
+                </button>
+                {!g.is_builtin ? (
+                  <button type="button" onClick={() => removeGoal(g.id)} disabled={deletingId === g.id} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-500 disabled:opacity-50">
+                    {deletingId === g.id ? '...' : 'Delete'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {editingId === g.id ? <GoalEditor goal={g} onSave={patch => saveGoal(g.id, patch)} onCancel={() => setEditingId(null)} /> : null}
+          </div>
+        ))}
+      </div>
+      {creating ? (
+        <NewGoalForm onCreate={createGoal} onCancel={() => setCreating(false)} />
+      ) : (
+        <button type="button" onClick={() => setCreating(true)} className="mt-4 rounded-xl border border-pink-200 px-4 py-2 text-sm font-bold text-pink-700 hover:bg-pink-50">
+          + Add a content goal
+        </button>
+      )}
+    </section>
   )
 }
 
@@ -1226,6 +1407,7 @@ export default function Home() {
   const [linkedinConnected, setLinkedinConnected] = useState(null)
   const [salonName, setSalonName] = useState('Keeping It Cute')
   const [staffRoster, setStaffRoster] = useState([])
+  const [goals, setGoals] = useState(FALLBACK_GOALS)
   const fileRef = useRef(null)
 
   useEffect(() => {
@@ -1234,6 +1416,7 @@ export default function Home() {
       if (d.settings?.salonName) setSalonName(d.settings.salonName)
       if (d.settings?.staffRoster) setStaffRoster(d.settings.staffRoster.split('\n').map(s => s.trim()).filter(Boolean))
     }).catch(() => null)
+    api('/api/goals').then(d => { if (d.goals?.length) setGoals(d.goals) }).catch(() => null)
   }, [])
 
   useEffect(() => () => {
@@ -1360,11 +1543,11 @@ export default function Home() {
                   <label>
                     <span className="mb-2 block text-sm font-bold text-slate-700">Post goal</span>
                     <select value={goal} onChange={e => setGoal(e.target.value)} className={inputClass}>
-                      {GOALS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                      {goals.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                     </select>
                   </label>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">{GOALS.find(item => item.id === goal)?.description}</p>
+                <p className="mt-3 text-xs text-slate-400">{goals.find(item => item.id === goal)?.description}</p>
                 <div className="mt-4">
                   <TemplatesPanel onLoad={loadTemplate} />
                 </div>
