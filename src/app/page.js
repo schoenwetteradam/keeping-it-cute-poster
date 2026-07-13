@@ -789,6 +789,210 @@ function GoalsManager() {
   )
 }
 
+// ── Help ──────────────────────────────────────────────────────────────────────
+
+function HelpStep({ n, children }) {
+  return (
+    <li className="flex gap-3 rounded-xl border border-slate-100 bg-white p-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-pink-600 text-xs font-bold text-white">{n}</span>
+      <div className="text-sm text-slate-700">{children}</div>
+    </li>
+  )
+}
+
+function HelpNote({ type = 'info', children }) {
+  const styles = {
+    info: 'border-pink-500 bg-pink-50 text-pink-900',
+    good: 'border-emerald-500 bg-emerald-50 text-emerald-900',
+    warn: 'border-amber-500 bg-amber-50 text-amber-900',
+  }
+  const tagStyles = { info: 'text-pink-600', good: 'text-emerald-600', warn: 'text-amber-600' }
+  const tags = { info: 'Note', good: 'Why it matters', warn: 'Heads up' }
+  return (
+    <div className={`mt-4 rounded-xl border-l-4 px-4 py-3 text-sm ${styles[type]}`}>
+      <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${tagStyles[type]}`}>{tags[type]}</p>
+      {children}
+    </div>
+  )
+}
+
+function HelpSection({ id, num, title, lede, children }) {
+  return (
+    <section id={id} className={panelClass}>
+      <h2 className="mb-1 text-lg font-bold text-slate-900">
+        <span className="mr-2 font-mono text-sm font-normal text-pink-600">{num}</span>{title}
+      </h2>
+      {lede ? <p className="mb-4 text-sm text-slate-500">{lede}</p> : null}
+      {children}
+    </section>
+  )
+}
+
+function HelpTab() {
+  return (
+    <div className="space-y-5">
+      <div className={panelClass}>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-pink-600">Keeping It Cute Salon &amp; Spa · Internal Reference</p>
+        <h1 className="text-2xl font-black text-slate-900">The Content Assistant, front to back</h1>
+        <p className="mt-2 text-sm text-slate-500">Everything you need to draft, polish, schedule, and learn from social posts — without touching a line of code.</p>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"><b className="text-slate-500">Web address</b> <code className="ml-1 text-pink-600">social.keepingitcute.net</code></span>
+          <span className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"><b className="text-slate-500">Login</b> ask Adam or Jessica for the username/password</span>
+          <span className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"><b className="text-slate-500">Works on</b> phone, tablet, or computer</span>
+        </div>
+      </div>
+
+      <HelpSection id="start" num="01" title="Getting in" lede="One shared login for the whole team — no personal accounts to manage.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Go to <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">social.keepingitcute.net</code> on any device.</HelpStep>
+          <HelpStep n={2}>Your browser will ask for a username and password — this is the shared salon login, not your personal email. Get it from Adam or Jessica if you don&apos;t have it yet.</HelpStep>
+          <HelpStep n={3}>You&apos;ll land on the <b>Create</b> tab. That&apos;s the home screen every time you log in.</HelpStep>
+        </ol>
+      </HelpSection>
+
+      <HelpSection id="create" num="02" title="Creating a post" lede="You write the raw idea; the assistant turns it into three ready-to-post directions per platform.">
+        <ol className="space-y-2">
+          <HelpStep n={1}><b>Enter your name</b> in Your name — posts are written in your voice, first-person. If the salon has set up a staff list in Brand Brain, this is a dropdown; otherwise just type it.</HelpStep>
+          <HelpStep n={2}><b>Pick a goal</b> from Post goal. This changes how the post is written, not just the topic — pick the one that matches your actual intent. Goals can be added or renamed in Brand Brain, so this list may grow over time.</HelpStep>
+          <HelpStep n={3}><b>Describe the post</b> in What should the post say? — be specific. &quot;Balayage on curly hair, client wanted a low-maintenance grow-out&quot; writes a far better post than &quot;did a color today.&quot;</HelpStep>
+          <HelpStep n={4}><b>Add a photo or video</b> (optional but strongly recommended) — Upload new for a fresh file, or Choose library to reuse something already uploaded. You can crop after selecting.</HelpStep>
+          <HelpStep n={5}><b>Check the platforms</b> you want drafts for — Facebook, Instagram, LinkedIn. Uncheck any that don&apos;t apply.</HelpStep>
+          <HelpStep n={6}>Click <b>Generate smart drafts</b> and wait a few seconds.</HelpStep>
+        </ol>
+        <HelpNote type="good">
+          The assistant looks back at your salon&apos;s own best-performing past posts for that exact goal before writing — a &quot;Showcase&quot; post and a &quot;Booth Renters&quot; post pull from completely different examples. Picking the right goal is one of the biggest levers you have over post quality.
+        </HelpNote>
+        <HelpNote type="info">
+          Already have a setup you like — same goal, same notes, same platforms? Click <b>Load template</b> above the goal picker instead of starting from scratch, or save your current setup as a new one with <b>Save as template</b> after generating.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="publish" num="03" title="Reviewing & publishing" lede="Every platform gets three directions: Balanced, Personal, and Bold. Pick, edit, and send.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>For each platform, click between <b>Balanced</b> / <b>Personal</b> / <b>Bold</b> to compare directions.</HelpStep>
+          <HelpStep n={2}>Edit the text directly in the box if anything needs a tweak — a name, a price, a fact. Click <b>Preview</b> to see roughly how it&apos;ll look on the actual platform.</HelpStep>
+          <HelpStep n={3}>Click <b>Save draft</b> to lock in your edits before doing anything else.</HelpStep>
+          <HelpStep n={4}>When it&apos;s ready, click <b>Publish to Facebook</b> / <b>Publish to Instagram</b> / <b>Publish to LinkedIn</b>.</HelpStep>
+        </ol>
+        <HelpNote type="info">
+          Instagram refuses to publish without a photo or video attached to the post. Facebook and LinkedIn don&apos;t require one.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="schedule" num="04" title="Scheduling for later" lede="Don't want it live right now? Queue it for a specific time instead.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Under the platform&apos;s text box, pick a date and time in the schedule field.</HelpStep>
+          <HelpStep n={2}>Click <b>Schedule</b>. You&apos;ll see a confirmation.</HelpStep>
+          <HelpStep n={3}>It publishes itself automatically at that time — nobody needs to be logged in or watching. You can check what&apos;s queued any time on the Insights tab.</HelpStep>
+        </ol>
+      </HelpSection>
+
+      <HelpSection id="rate" num="05" title="Rating drafts — this is how it gets smarter" lede="This is the one habit that actually matters. Skip everything else on this page before you skip this.">
+        <p className="text-sm text-slate-700">
+          After publishing (or any time later, from History), rate the post 1–5 stars and add a one-line note — <i>&quot;brought in three DMs,&quot; &quot;felt too stiff,&quot; &quot;clients loved the before/after.&quot;</i> That note is worth more than the star rating alone.
+        </p>
+        <HelpNote type="good">
+          Every time you generate a new post, the assistant looks at your salon&apos;s highest-rated and best-performing past posts for that goal and platform, and writes toward that pattern. An unrated post teaches it nothing. A handful of honest ratings a week is what separates this from a generic AI tool.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="renters" num="06" title="Tracking booth renters" lede="Likes don't pay rent. This tracks whether a post actually led to a real renter.">
+        <p className="mb-4 text-sm text-slate-700">
+          Any post made with the <b>Attract Booth Renters</b> goal gets a small outcome tracker — on the post itself right after publishing, in History, and in the Insights tab. Whoever fields the response marks it:
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <h3 className="text-sm font-bold text-slate-800">Got an inquiry</h3>
+            <p className="mt-1 text-xs text-slate-500">Someone reached out — DM, call, walk-in asking about the space.</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <h3 className="text-sm font-bold text-slate-800">Tour scheduled</h3>
+            <p className="mt-1 text-xs text-slate-500">You&apos;ve booked a time to show them the salon.</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <h3 className="text-sm font-bold text-slate-800">Renter signed!</h3>
+            <p className="mt-1 text-xs text-slate-500">They signed a lease. This is the number that actually matters.</p>
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-slate-700">
+          Click again on the same button to undo a mis-click. The Insights tab rolls all of this up into a <b>Booth Renter Funnel</b> — posts → inquiries → tours → signed — broken down by which style of post actually converts, not just which one got the most likes.
+        </p>
+      </HelpSection>
+
+      <HelpSection id="media" num="07" title="Media library" lede="Every photo and video you've ever uploaded lives here, reusable across future posts.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Open the <b>Media</b> tab to browse everything uploaded so far.</HelpStep>
+          <HelpStep n={2}>Upload straight from there, or via Upload new while creating a post.</HelpStep>
+          <HelpStep n={3}>JPG, PNG, WebP, MP4, or MOV, up to 25 MB. Good lighting and a clean background make a noticeably bigger difference than resolution.</HelpStep>
+        </ol>
+      </HelpSection>
+
+      <HelpSection id="brand" num="08" title="Brand Brain" lede="The salon's voice, in one place — read by every single generation.">
+        <p className="mb-4 text-sm text-slate-700">
+          This is the fastest lever for making posts sound like <i>this salon</i> and not a generic template — it applies immediately, with zero data needed. Worth 10 minutes with Adam or Jessica to fill in properly, especially:
+        </p>
+        <div className="overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                <th className="px-4 py-2">Field</th>
+                <th className="px-4 py-2">What to put there</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Voice</td><td className="px-4 py-2 text-slate-600">How the salon actually talks — warm, playful, direct, whatever&apos;s true</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Signature phrases</td><td className="px-4 py-2 text-slate-600">Things you say often and want to show up naturally</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Avoid phrases</td><td className="px-4 py-2 text-slate-600">Generic filler you&apos;re sick of seeing in AI content — be specific</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Booth benefits</td><td className="px-4 py-2 text-slate-600">What actually makes renting here worth it — used only for renter-goal posts</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Staff roster</td><td className="px-4 py-2 text-slate-600">Add each team member once so &quot;Your name&quot; becomes a dropdown instead of free text</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Content Goals</td><td className="px-4 py-2 text-slate-600">Add, rename, or retune the AI guidance behind each Post goal option — e.g. a new &quot;Holiday Promo&quot; goal</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <HelpNote type="warn">
+          Anyone can view Brand Brain, but changes here affect every post going forward — treat it like editing the salon&apos;s About page, not a personal setting.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="insights" num="09" title="History & Insights" lede="Where you check what's actually working.">
+        <ul className="space-y-2 text-sm text-slate-700">
+          <li><b>History</b> — a calendar of every post ever made. Click a day to see what went out, or scroll the month list.</li>
+          <li><b>Insights</b> — totals, the strongest-performing pattern by platform and goal, the Booth Renter Funnel, anything scheduled or stuck on a failed publish, and a Sync Facebook stats button to pull in fresh like/comment/share counts on demand.</li>
+        </ul>
+      </HelpSection>
+
+      <HelpSection id="status" num="10" title="What's connected" lede="Straight status, so nobody's confused by an error message.">
+        <div className="overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                <th className="px-4 py-2">Feature</th>
+                <th className="px-4 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr><td className="px-4 py-2 text-slate-700">Draft, edit, rate, schedule, track renters</td><td className="px-4 py-2"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">● Live</span></td></tr>
+              <tr><td className="px-4 py-2 text-slate-700">Publish directly to Facebook / Instagram</td><td className="px-4 py-2"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">● Live</span></td></tr>
+              <tr><td className="px-4 py-2 text-slate-700">Publish directly to LinkedIn</td><td className="px-4 py-2"><span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">● Not yet connected</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <HelpNote type="warn">
+          Until LinkedIn is connected, clicking Publish to LinkedIn will show an error instead of going live. In the meantime: click <b>Copy</b> to copy the finished caption, then paste it into the LinkedIn app yourself, same as you would today. Everything else — drafting, rating, the learning loop, renter tracking — works exactly the same either way.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="help" num="11" title="If something breaks">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Try reloading the page first — fixes most one-off glitches.</HelpStep>
+          <HelpStep n={2}>Note what you were doing and the exact error text, if any — a screenshot is ideal.</HelpStep>
+          <HelpStep n={3}>Send it to Adam. Most fixes so far have taken minutes once the actual error message is in hand.</HelpStep>
+        </ol>
+      </HelpSection>
+    </div>
+  )
+}
+
 // ── Insights ──────────────────────────────────────────────────────────────────
 
 function InsightsTab() {
@@ -1494,6 +1698,7 @@ export default function Home() {
     ['history', 'History'],
     ['insights', 'Insights'],
     ['settings', 'Brand Brain'],
+    ['help', 'Help'],
   ]
 
   return (
@@ -1529,6 +1734,7 @@ export default function Home() {
       <div className="mx-auto max-w-5xl px-4 py-8">
         {activeTab === 'library' ? <MediaLibrary onUse={useLibraryItem} /> : null}
         {activeTab === 'settings' ? <SettingsTab /> : null}
+        {activeTab === 'help' ? <HelpTab /> : null}
         {activeTab === 'insights' ? <InsightsTab /> : null}
         {activeTab === 'history' ? <HistoryTab /> : null}
         {activeTab === 'create' ? (
