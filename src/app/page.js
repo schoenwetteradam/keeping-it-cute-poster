@@ -426,6 +426,80 @@ function MediaLibrary({ onUse }) {
 
 // ── Settings / Brand Brain ────────────────────────────────────────────────────
 
+function StaffRosterField({ value, onChange }) {
+  const names = (value || '').split('\n').map(s => s.trim()).filter(Boolean)
+  const [draft, setDraft] = useState('')
+
+  const add = () => {
+    const name = draft.trim()
+    if (!name || names.includes(name)) { setDraft(''); return }
+    onChange([...names, name].join('\n'))
+    setDraft('')
+  }
+
+  const remove = name => onChange(names.filter(n => n !== name).join('\n'))
+
+  return (
+    <div className="sm:col-span-2">
+      <span className="mb-2 block text-sm font-semibold text-slate-700">Staff roster</span>
+      <p className="mb-2 text-xs text-slate-400">Names shown in the &quot;Your name&quot; dropdown on the Create tab.</p>
+      {names.length ? (
+        <ul className="mb-3 flex flex-wrap gap-2">
+          {names.map(name => (
+            <li key={name} className="flex items-center gap-2 rounded-full bg-pink-50 px-3 py-1.5 text-sm font-semibold text-pink-700">
+              {name}
+              <button type="button" onClick={() => remove(name)} className="text-pink-400 hover:text-pink-700" aria-label={`Remove ${name}`}>×</button>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="mb-3 text-sm text-slate-400">No staff added yet — everyone will type their name freely until you add some.</p>}
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          className={inputClass}
+          placeholder="Add a staff member"
+        />
+        <button type="button" onClick={add} className="whitespace-nowrap rounded-xl border border-pink-200 px-4 py-2 text-sm font-bold text-pink-700 hover:bg-pink-50">Add</button>
+      </div>
+    </div>
+  )
+}
+
+function StaffNameField({ value, onChange, roster }) {
+  const [useCustom, setUseCustom] = useState(false)
+
+  if (!roster.length || useCustom) {
+    return (
+      <div>
+        <input value={value} onChange={e => onChange(e.target.value)} className={inputClass} placeholder="Jessica" required />
+        {roster.length ? (
+          <button type="button" onClick={() => { setUseCustom(false); onChange('') }} className="mt-1 text-xs font-semibold text-pink-600 hover:underline">
+            Choose from staff list
+          </button>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <select
+      value={roster.includes(value) ? value : ''}
+      onChange={e => {
+        if (e.target.value === '__other__') { setUseCustom(true); onChange('') }
+        else onChange(e.target.value)
+      }}
+      className={inputClass}
+      required
+    >
+      <option value="" disabled>Select your name</option>
+      {roster.map(name => <option key={name} value={name}>{name}</option>)}
+      <option value="__other__">Someone else…</option>
+    </select>
+  )
+}
+
 function SettingsTab() {
   const [settings, setSettings] = useState(null)
   const [status, setStatus] = useState('loading')
@@ -492,6 +566,7 @@ function SettingsTab() {
               )}
             </label>
           ))}
+          <StaffRosterField value={settings.staffRoster} onChange={v => setSettings(c => ({ ...c, staffRoster: v }))} />
         </div>
         {status === 'error' ? <div className="mt-4"><Notice type="error">{message}</Notice></div> : null}
         <button type="submit" disabled={status === 'saving'} className="mt-6 rounded-xl bg-pink-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">
@@ -1140,11 +1215,15 @@ export default function Home() {
   const [error, setError] = useState('')
   const [linkedinConnected, setLinkedinConnected] = useState(null)
   const [salonName, setSalonName] = useState('Keeping It Cute')
+  const [staffRoster, setStaffRoster] = useState([])
   const fileRef = useRef(null)
 
   useEffect(() => {
     api('/api/linkedin/status').then(d => setLinkedinConnected(d.connected && !d.expired)).catch(() => setLinkedinConnected(false))
-    api('/api/settings').then(d => { if (d.settings?.salonName) setSalonName(d.settings.salonName) }).catch(() => null)
+    api('/api/settings').then(d => {
+      if (d.settings?.salonName) setSalonName(d.settings.salonName)
+      if (d.settings?.staffRoster) setStaffRoster(d.settings.staffRoster.split('\n').map(s => s.trim()).filter(Boolean))
+    }).catch(() => null)
   }, [])
 
   useEffect(() => () => {
@@ -1265,7 +1344,7 @@ export default function Home() {
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label>
                     <span className="mb-2 block text-sm font-bold text-slate-700">Your name</span>
-                    <input value={employeeName} onChange={e => setEmployeeName(e.target.value)} className={inputClass} placeholder="Jessica" required />
+                    <StaffNameField value={employeeName} onChange={setEmployeeName} roster={staffRoster} />
                   </label>
                   <label>
                     <span className="mb-2 block text-sm font-bold text-slate-700">Post goal</span>
