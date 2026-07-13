@@ -8,7 +8,8 @@ const PLATFORMS = [
   { id: 'linkedin', label: 'LinkedIn', color: 'bg-sky-700' },
 ]
 
-const GOALS = [
+// Shown until /api/goals resolves (or if it fails) so the dropdown is never empty.
+const FALLBACK_GOALS = [
   { id: 'booth_renters', label: 'Attract Booth Renters', description: 'Reach independent beauty professionals looking for their next salon home.' },
   { id: 'new_clients', label: 'Attract New Clients', description: 'Help potential clients picture the service, result, and experience.' },
   { id: 'showcase', label: 'Showcase My Work', description: 'Share a transformation, technique, or service without a hard sell.' },
@@ -23,6 +24,16 @@ const VARIANTS = [
 
 const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-100'
 const panelClass = 'rounded-2xl border border-pink-100 bg-white p-5 shadow-sm sm:p-6'
+
+// PostgREST returns jsonb columns as already-parsed JSON, not a string — but
+// older cached rows or manual edits could still hand back a string, so accept both.
+function parsePlatforms(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) } catch { return [] }
+  }
+  return []
+}
 
 async function api(url, options) {
   const response = await fetch(url, options)
@@ -426,6 +437,80 @@ function MediaLibrary({ onUse }) {
 
 // ── Settings / Brand Brain ────────────────────────────────────────────────────
 
+function StaffRosterField({ value, onChange }) {
+  const names = (value || '').split('\n').map(s => s.trim()).filter(Boolean)
+  const [draft, setDraft] = useState('')
+
+  const add = () => {
+    const name = draft.trim()
+    if (!name || names.includes(name)) { setDraft(''); return }
+    onChange([...names, name].join('\n'))
+    setDraft('')
+  }
+
+  const remove = name => onChange(names.filter(n => n !== name).join('\n'))
+
+  return (
+    <div className="sm:col-span-2">
+      <span className="mb-2 block text-sm font-semibold text-slate-700">Staff roster</span>
+      <p className="mb-2 text-xs text-slate-400">Names shown in the &quot;Your name&quot; dropdown on the Create tab.</p>
+      {names.length ? (
+        <ul className="mb-3 flex flex-wrap gap-2">
+          {names.map(name => (
+            <li key={name} className="flex items-center gap-2 rounded-full bg-pink-50 px-3 py-1.5 text-sm font-semibold text-pink-700">
+              {name}
+              <button type="button" onClick={() => remove(name)} className="text-pink-400 hover:text-pink-700" aria-label={`Remove ${name}`}>×</button>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="mb-3 text-sm text-slate-400">No staff added yet — everyone will type their name freely until you add some.</p>}
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          className={inputClass}
+          placeholder="Add a staff member"
+        />
+        <button type="button" onClick={add} className="whitespace-nowrap rounded-xl border border-pink-200 px-4 py-2 text-sm font-bold text-pink-700 hover:bg-pink-50">Add</button>
+      </div>
+    </div>
+  )
+}
+
+function StaffNameField({ value, onChange, roster }) {
+  const [useCustom, setUseCustom] = useState(false)
+
+  if (!roster.length || useCustom) {
+    return (
+      <div>
+        <input value={value} onChange={e => onChange(e.target.value)} className={inputClass} placeholder="Jessica" required />
+        {roster.length ? (
+          <button type="button" onClick={() => { setUseCustom(false); onChange('') }} className="mt-1 text-xs font-semibold text-pink-600 hover:underline">
+            Choose from staff list
+          </button>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <select
+      value={roster.includes(value) ? value : ''}
+      onChange={e => {
+        if (e.target.value === '__other__') { setUseCustom(true); onChange('') }
+        else onChange(e.target.value)
+      }}
+      className={inputClass}
+      required
+    >
+      <option value="" disabled>Select your name</option>
+      {roster.map(name => <option key={name} value={name}>{name}</option>)}
+      <option value="__other__">Someone else…</option>
+    </select>
+  )
+}
+
 function SettingsTab() {
   const [settings, setSettings] = useState(null)
   const [status, setStatus] = useState('loading')
@@ -492,6 +577,7 @@ function SettingsTab() {
               )}
             </label>
           ))}
+          <StaffRosterField value={settings.staffRoster} onChange={v => setSettings(c => ({ ...c, staffRoster: v }))} />
         </div>
         {status === 'error' ? <div className="mt-4"><Notice type="error">{message}</Notice></div> : null}
         <button type="submit" disabled={status === 'saving'} className="mt-6 rounded-xl bg-pink-600 px-6 py-3 text-sm font-bold text-white disabled:opacity-50">
@@ -519,6 +605,390 @@ function SettingsTab() {
         </div>
         <p className="mt-4 text-xs text-slate-400">LinkedIn uses OAuth — connect via the LinkedIn button on any post draft.</p>
       </section>
+
+      <GoalsManager />
+    </div>
+  )
+}
+
+function GoalEditor({ goal, onSave, onCancel }) {
+  const [label, setLabel] = useState(goal.label)
+  const [description, setDescription] = useState(goal.description)
+  const [aiGuidance, setAiGuidance] = useState(goal.ai_guidance)
+  const [hashtagsInstagram, setHashtagsInstagram] = useState(goal.hashtags_instagram)
+  const [hashtagsLinkedin, setHashtagsLinkedin] = useState(goal.hashtags_linkedin)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const save = async () => {
+    if (!label.trim()) { setError('Label is required.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await onSave({ label, description, aiGuidance, hashtagsInstagram, hashtagsLinkedin })
+    } catch (err) {
+      setError(err.message)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border border-pink-100 bg-white p-3">
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Label</span>
+        <input value={label} onChange={e => setLabel(e.target.value)} className={inputClass} />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Description (shown under the dropdown on Create)</span>
+        <input value={description} onChange={e => setDescription(e.target.value)} className={inputClass} />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">AI guidance — what should this type of post do, and how should it sound?</span>
+        <textarea rows={2} value={aiGuidance} onChange={e => setAiGuidance(e.target.value)} className={inputClass} />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-slate-600">Instagram hashtag pool</span>
+          <input value={hashtagsInstagram} onChange={e => setHashtagsInstagram(e.target.value)} className={inputClass} placeholder="#salonlife #btccuts ..." />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-slate-600">LinkedIn hashtag pool</span>
+          <input value={hashtagsLinkedin} onChange={e => setHashtagsLinkedin(e.target.value)} className={inputClass} placeholder="#beauty #hairstylist ..." />
+        </label>
+      </div>
+      {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
+      <div className="flex gap-2">
+        <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function NewGoalForm({ onCreate, onCancel }) {
+  const [label, setLabel] = useState('')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const create = async () => {
+    if (!label.trim()) { setError('Label is required.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      await onCreate({ label: label.trim(), description: description.trim() })
+    } catch (err) {
+      setError(err.message)
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border border-pink-200 bg-white p-3">
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Label</span>
+        <input value={label} onChange={e => setLabel(e.target.value)} className={inputClass} placeholder="e.g. Holiday Promo" />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">Description (shown under the dropdown on Create)</span>
+        <input value={description} onChange={e => setDescription(e.target.value)} className={inputClass} placeholder="e.g. Promote seasonal specials and gift cards" />
+      </label>
+      <p className="text-xs text-slate-400">You can add AI guidance and hashtags after creating it.</p>
+      {error ? <p className="text-xs font-semibold text-red-600">{error}</p> : null}
+      <div className="flex gap-2">
+        <button type="button" onClick={create} disabled={saving} className="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+          {saving ? 'Adding...' : 'Add goal'}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+function GoalsManager() {
+  const [goals, setGoals] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api('/api/goals').then(d => setGoals(d.goals || [])).catch(err => setError(err.message))
+  }, [])
+
+  const saveGoal = async (id, patch) => {
+    const data = await api(`/api/goals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+    setGoals(gs => gs.map(g => g.id === id ? data.goal : g))
+    setEditingId(null)
+  }
+
+  const createGoal = async payload => {
+    const data = await api('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    setGoals(gs => [...gs, data.goal])
+    setCreating(false)
+  }
+
+  const removeGoal = async id => {
+    setDeletingId(id)
+    try {
+      await api(`/api/goals/${id}`, { method: 'DELETE' })
+      setGoals(gs => gs.filter(g => g.id !== id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  if (!goals) return <section className={panelClass}><p className="text-sm text-slate-400">Loading content goals...</p></section>
+
+  return (
+    <section className={panelClass}>
+      <h2 className="mb-1 text-lg font-bold text-slate-900">Content Goals</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        These drive the &quot;Post goal&quot; dropdown on Create and shape how the AI writes for each one.
+        The four built-in goals can be edited but not deleted. Changes appear on Create after a page refresh.
+      </p>
+      {error ? <div className="mb-3"><Notice type="error">{error}</Notice></div> : null}
+      <div className="space-y-2">
+        {goals.map(g => (
+          <div key={g.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {g.label}
+                  {g.is_builtin ? <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-500">Built-in</span> : null}
+                </p>
+                <p className="text-xs text-slate-400">{g.description}</p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button type="button" onClick={() => setEditingId(editingId === g.id ? null : g.id)} className="rounded-lg border border-pink-200 px-3 py-1.5 text-xs font-bold text-pink-700 hover:bg-pink-50">
+                  {editingId === g.id ? 'Close' : 'Edit'}
+                </button>
+                {!g.is_builtin ? (
+                  <button type="button" onClick={() => removeGoal(g.id)} disabled={deletingId === g.id} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-500 disabled:opacity-50">
+                    {deletingId === g.id ? '...' : 'Delete'}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {editingId === g.id ? <GoalEditor goal={g} onSave={patch => saveGoal(g.id, patch)} onCancel={() => setEditingId(null)} /> : null}
+          </div>
+        ))}
+      </div>
+      {creating ? (
+        <NewGoalForm onCreate={createGoal} onCancel={() => setCreating(false)} />
+      ) : (
+        <button type="button" onClick={() => setCreating(true)} className="mt-4 rounded-xl border border-pink-200 px-4 py-2 text-sm font-bold text-pink-700 hover:bg-pink-50">
+          + Add a content goal
+        </button>
+      )}
+    </section>
+  )
+}
+
+// ── Help ──────────────────────────────────────────────────────────────────────
+
+function HelpStep({ n, children }) {
+  return (
+    <li className="flex gap-3 rounded-xl border border-slate-100 bg-white p-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-pink-600 text-xs font-bold text-white">{n}</span>
+      <div className="text-sm text-slate-700">{children}</div>
+    </li>
+  )
+}
+
+function HelpNote({ type = 'info', children }) {
+  const styles = {
+    info: 'border-pink-500 bg-pink-50 text-pink-900',
+    good: 'border-emerald-500 bg-emerald-50 text-emerald-900',
+    warn: 'border-amber-500 bg-amber-50 text-amber-900',
+  }
+  const tagStyles = { info: 'text-pink-600', good: 'text-emerald-600', warn: 'text-amber-600' }
+  const tags = { info: 'Note', good: 'Why it matters', warn: 'Heads up' }
+  return (
+    <div className={`mt-4 rounded-xl border-l-4 px-4 py-3 text-sm ${styles[type]}`}>
+      <p className={`mb-1 text-xs font-bold uppercase tracking-wide ${tagStyles[type]}`}>{tags[type]}</p>
+      {children}
+    </div>
+  )
+}
+
+function HelpSection({ id, num, title, lede, children }) {
+  return (
+    <section id={id} className={panelClass}>
+      <h2 className="mb-1 text-lg font-bold text-slate-900">
+        <span className="mr-2 font-mono text-sm font-normal text-pink-600">{num}</span>{title}
+      </h2>
+      {lede ? <p className="mb-4 text-sm text-slate-500">{lede}</p> : null}
+      {children}
+    </section>
+  )
+}
+
+function HelpTab() {
+  return (
+    <div className="space-y-5">
+      <div className={panelClass}>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-pink-600">Keeping It Cute Salon &amp; Spa · Internal Reference</p>
+        <h1 className="text-2xl font-black text-slate-900">The Content Assistant, front to back</h1>
+        <p className="mt-2 text-sm text-slate-500">Everything you need to draft, polish, schedule, and learn from social posts — without touching a line of code.</p>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"><b className="text-slate-500">Web address</b> <code className="ml-1 text-pink-600">social.keepingitcute.net</code></span>
+          <span className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"><b className="text-slate-500">Login</b> ask Adam or Jessica for the username/password</span>
+          <span className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"><b className="text-slate-500">Works on</b> phone, tablet, or computer</span>
+        </div>
+      </div>
+
+      <HelpSection id="start" num="01" title="Getting in" lede="One shared login for the whole team — no personal accounts to manage.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Go to <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">social.keepingitcute.net</code> on any device.</HelpStep>
+          <HelpStep n={2}>Your browser will ask for a username and password — this is the shared salon login, not your personal email. Get it from Adam or Jessica if you don&apos;t have it yet.</HelpStep>
+          <HelpStep n={3}>You&apos;ll land on the <b>Create</b> tab. That&apos;s the home screen every time you log in.</HelpStep>
+        </ol>
+      </HelpSection>
+
+      <HelpSection id="create" num="02" title="Creating a post" lede="You write the raw idea; the assistant turns it into three ready-to-post directions per platform.">
+        <ol className="space-y-2">
+          <HelpStep n={1}><b>Enter your name</b> in Your name — posts are written in your voice, first-person. If the salon has set up a staff list in Brand Brain, this is a dropdown; otherwise just type it.</HelpStep>
+          <HelpStep n={2}><b>Pick a goal</b> from Post goal. This changes how the post is written, not just the topic — pick the one that matches your actual intent. Goals can be added or renamed in Brand Brain, so this list may grow over time.</HelpStep>
+          <HelpStep n={3}><b>Describe the post</b> in What should the post say? — be specific. &quot;Balayage on curly hair, client wanted a low-maintenance grow-out&quot; writes a far better post than &quot;did a color today.&quot;</HelpStep>
+          <HelpStep n={4}><b>Add a photo or video</b> (optional but strongly recommended) — Upload new for a fresh file, or Choose library to reuse something already uploaded. You can crop after selecting.</HelpStep>
+          <HelpStep n={5}><b>Check the platforms</b> you want drafts for — Facebook, Instagram, LinkedIn. Uncheck any that don&apos;t apply.</HelpStep>
+          <HelpStep n={6}>Click <b>Generate smart drafts</b> and wait a few seconds.</HelpStep>
+        </ol>
+        <HelpNote type="good">
+          The assistant looks back at your salon&apos;s own best-performing past posts for that exact goal before writing — a &quot;Showcase&quot; post and a &quot;Booth Renters&quot; post pull from completely different examples. Picking the right goal is one of the biggest levers you have over post quality.
+        </HelpNote>
+        <HelpNote type="info">
+          Already have a setup you like — same goal, same notes, same platforms? Click <b>Load template</b> above the goal picker instead of starting from scratch, or save your current setup as a new one with <b>Save as template</b> after generating.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="publish" num="03" title="Reviewing & publishing" lede="Every platform gets three directions: Balanced, Personal, and Bold. Pick, edit, and send.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>For each platform, click between <b>Balanced</b> / <b>Personal</b> / <b>Bold</b> to compare directions.</HelpStep>
+          <HelpStep n={2}>Edit the text directly in the box if anything needs a tweak — a name, a price, a fact. Click <b>Preview</b> to see roughly how it&apos;ll look on the actual platform.</HelpStep>
+          <HelpStep n={3}>Click <b>Save draft</b> to lock in your edits before doing anything else.</HelpStep>
+          <HelpStep n={4}>When it&apos;s ready, click <b>Publish to Facebook</b> / <b>Publish to Instagram</b> / <b>Publish to LinkedIn</b>.</HelpStep>
+        </ol>
+        <HelpNote type="info">
+          Instagram refuses to publish without a photo or video attached to the post. Facebook and LinkedIn don&apos;t require one.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="schedule" num="04" title="Scheduling for later" lede="Don't want it live right now? Queue it for a specific time instead.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Under the platform&apos;s text box, pick a date and time in the schedule field.</HelpStep>
+          <HelpStep n={2}>Click <b>Schedule</b>. You&apos;ll see a confirmation.</HelpStep>
+          <HelpStep n={3}>It publishes itself automatically at that time — nobody needs to be logged in or watching. You can check what&apos;s queued any time on the Insights tab.</HelpStep>
+        </ol>
+      </HelpSection>
+
+      <HelpSection id="rate" num="05" title="Rating drafts — this is how it gets smarter" lede="This is the one habit that actually matters. Skip everything else on this page before you skip this.">
+        <p className="text-sm text-slate-700">
+          After publishing (or any time later, from History), rate the post 1–5 stars and add a one-line note — <i>&quot;brought in three DMs,&quot; &quot;felt too stiff,&quot; &quot;clients loved the before/after.&quot;</i> That note is worth more than the star rating alone.
+        </p>
+        <HelpNote type="good">
+          Every time you generate a new post, the assistant looks at your salon&apos;s highest-rated and best-performing past posts for that goal and platform, and writes toward that pattern. An unrated post teaches it nothing. A handful of honest ratings a week is what separates this from a generic AI tool.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="renters" num="06" title="Tracking booth renters" lede="Likes don't pay rent. This tracks whether a post actually led to a real renter.">
+        <p className="mb-4 text-sm text-slate-700">
+          Any post made with the <b>Attract Booth Renters</b> goal gets a small outcome tracker — on the post itself right after publishing, in History, and in the Insights tab. Whoever fields the response marks it:
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <h3 className="text-sm font-bold text-slate-800">Got an inquiry</h3>
+            <p className="mt-1 text-xs text-slate-500">Someone reached out — DM, call, walk-in asking about the space.</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <h3 className="text-sm font-bold text-slate-800">Tour scheduled</h3>
+            <p className="mt-1 text-xs text-slate-500">You&apos;ve booked a time to show them the salon.</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <h3 className="text-sm font-bold text-slate-800">Renter signed!</h3>
+            <p className="mt-1 text-xs text-slate-500">They signed a lease. This is the number that actually matters.</p>
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-slate-700">
+          Click again on the same button to undo a mis-click. The Insights tab rolls all of this up into a <b>Booth Renter Funnel</b> — posts → inquiries → tours → signed — broken down by which style of post actually converts, not just which one got the most likes.
+        </p>
+      </HelpSection>
+
+      <HelpSection id="media" num="07" title="Media library" lede="Every photo and video you've ever uploaded lives here, reusable across future posts.">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Open the <b>Media</b> tab to browse everything uploaded so far.</HelpStep>
+          <HelpStep n={2}>Upload straight from there, or via Upload new while creating a post.</HelpStep>
+          <HelpStep n={3}>JPG, PNG, WebP, MP4, or MOV, up to 25 MB. Good lighting and a clean background make a noticeably bigger difference than resolution.</HelpStep>
+        </ol>
+      </HelpSection>
+
+      <HelpSection id="brand" num="08" title="Brand Brain" lede="The salon's voice, in one place — read by every single generation.">
+        <p className="mb-4 text-sm text-slate-700">
+          This is the fastest lever for making posts sound like <i>this salon</i> and not a generic template — it applies immediately, with zero data needed. Worth 10 minutes with Adam or Jessica to fill in properly, especially:
+        </p>
+        <div className="overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                <th className="px-4 py-2">Field</th>
+                <th className="px-4 py-2">What to put there</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Voice</td><td className="px-4 py-2 text-slate-600">How the salon actually talks — warm, playful, direct, whatever&apos;s true</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Signature phrases</td><td className="px-4 py-2 text-slate-600">Things you say often and want to show up naturally</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Avoid phrases</td><td className="px-4 py-2 text-slate-600">Generic filler you&apos;re sick of seeing in AI content — be specific</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Booth benefits</td><td className="px-4 py-2 text-slate-600">What actually makes renting here worth it — used only for renter-goal posts</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Staff roster</td><td className="px-4 py-2 text-slate-600">Add each team member once so &quot;Your name&quot; becomes a dropdown instead of free text</td></tr>
+              <tr><td className="px-4 py-2 font-semibold text-slate-700">Content Goals</td><td className="px-4 py-2 text-slate-600">Add, rename, or retune the AI guidance behind each Post goal option — e.g. a new &quot;Holiday Promo&quot; goal</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <HelpNote type="warn">
+          Anyone can view Brand Brain, but changes here affect every post going forward — treat it like editing the salon&apos;s About page, not a personal setting.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="insights" num="09" title="History & Insights" lede="Where you check what's actually working.">
+        <ul className="space-y-2 text-sm text-slate-700">
+          <li><b>History</b> — a calendar of every post ever made. Click a day to see what went out, or scroll the month list.</li>
+          <li><b>Insights</b> — totals, the strongest-performing pattern by platform and goal, the Booth Renter Funnel, anything scheduled or stuck on a failed publish, and a Sync Facebook stats button to pull in fresh like/comment/share counts on demand.</li>
+        </ul>
+      </HelpSection>
+
+      <HelpSection id="status" num="10" title="What's connected" lede="Straight status, so nobody's confused by an error message.">
+        <div className="overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                <th className="px-4 py-2">Feature</th>
+                <th className="px-4 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr><td className="px-4 py-2 text-slate-700">Draft, edit, rate, schedule, track renters</td><td className="px-4 py-2"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">● Live</span></td></tr>
+              <tr><td className="px-4 py-2 text-slate-700">Publish directly to Facebook / Instagram</td><td className="px-4 py-2"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">● Live</span></td></tr>
+              <tr><td className="px-4 py-2 text-slate-700">Publish directly to LinkedIn</td><td className="px-4 py-2"><span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">● Not yet connected</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <HelpNote type="warn">
+          Until LinkedIn is connected, clicking Publish to LinkedIn will show an error instead of going live. In the meantime: click <b>Copy</b> to copy the finished caption, then paste it into the LinkedIn app yourself, same as you would today. Everything else — drafting, rating, the learning loop, renter tracking — works exactly the same either way.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="help" num="11" title="If something breaks">
+        <ol className="space-y-2">
+          <HelpStep n={1}>Try reloading the page first — fixes most one-off glitches.</HelpStep>
+          <HelpStep n={2}>Note what you were doing and the exact error text, if any — a screenshot is ideal.</HelpStep>
+          <HelpStep n={3}>Send it to Adam. Most fixes so far have taken minutes once the actual error message is in hand.</HelpStep>
+        </ol>
+      </HelpSection>
     </div>
   )
 }
@@ -894,7 +1364,7 @@ function TemplatesPanel({ onLoad }) {
               <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2.5 border border-pink-100">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">{t.name}</p>
-                  <p className="text-xs text-slate-400">{String(t.goal).replaceAll('_', ' ')} · {JSON.parse(t.platforms || '[]').join(', ')}</p>
+                  <p className="text-xs text-slate-400">{String(t.goal).replaceAll('_', ' ')} · {parsePlatforms(t.platforms).join(', ')}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button type="button" onClick={() => { onLoad(t); setOpen(false) }} className="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-bold text-white">Load</button>
@@ -1140,11 +1610,17 @@ export default function Home() {
   const [error, setError] = useState('')
   const [linkedinConnected, setLinkedinConnected] = useState(null)
   const [salonName, setSalonName] = useState('Keeping It Cute')
+  const [staffRoster, setStaffRoster] = useState([])
+  const [goals, setGoals] = useState(FALLBACK_GOALS)
   const fileRef = useRef(null)
 
   useEffect(() => {
     api('/api/linkedin/status').then(d => setLinkedinConnected(d.connected && !d.expired)).catch(() => setLinkedinConnected(false))
-    api('/api/settings').then(d => { if (d.settings?.salonName) setSalonName(d.settings.salonName) }).catch(() => null)
+    api('/api/settings').then(d => {
+      if (d.settings?.salonName) setSalonName(d.settings.salonName)
+      if (d.settings?.staffRoster) setStaffRoster(d.settings.staffRoster.split('\n').map(s => s.trim()).filter(Boolean))
+    }).catch(() => null)
+    api('/api/goals').then(d => { if (d.goals?.length) setGoals(d.goals) }).catch(() => null)
   }, [])
 
   useEffect(() => () => {
@@ -1184,7 +1660,8 @@ export default function Home() {
   const loadTemplate = template => {
     setGoal(template.goal || 'showcase')
     setContext(template.context || '')
-    try { setSelectedPlatforms(JSON.parse(template.platforms)) } catch { /* keep current */ }
+    const platforms = parsePlatforms(template.platforms)
+    if (platforms.length) setSelectedPlatforms(platforms)
   }
 
   const togglePlatform = platform => {
@@ -1221,6 +1698,7 @@ export default function Home() {
     ['history', 'History'],
     ['insights', 'Insights'],
     ['settings', 'Brand Brain'],
+    ['help', 'Help'],
   ]
 
   return (
@@ -1256,6 +1734,7 @@ export default function Home() {
       <div className="mx-auto max-w-5xl px-4 py-8">
         {activeTab === 'library' ? <MediaLibrary onUse={useLibraryItem} /> : null}
         {activeTab === 'settings' ? <SettingsTab /> : null}
+        {activeTab === 'help' ? <HelpTab /> : null}
         {activeTab === 'insights' ? <InsightsTab /> : null}
         {activeTab === 'history' ? <HistoryTab /> : null}
         {activeTab === 'create' ? (
@@ -1265,16 +1744,16 @@ export default function Home() {
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label>
                     <span className="mb-2 block text-sm font-bold text-slate-700">Your name</span>
-                    <input value={employeeName} onChange={e => setEmployeeName(e.target.value)} className={inputClass} placeholder="Jessica" required />
+                    <StaffNameField value={employeeName} onChange={setEmployeeName} roster={staffRoster} />
                   </label>
                   <label>
                     <span className="mb-2 block text-sm font-bold text-slate-700">Post goal</span>
                     <select value={goal} onChange={e => setGoal(e.target.value)} className={inputClass}>
-                      {GOALS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                      {goals.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
                     </select>
                   </label>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">{GOALS.find(item => item.id === goal)?.description}</p>
+                <p className="mt-3 text-xs text-slate-400">{goals.find(item => item.id === goal)?.description}</p>
                 <div className="mt-4">
                   <TemplatesPanel onLoad={loadTemplate} />
                 </div>

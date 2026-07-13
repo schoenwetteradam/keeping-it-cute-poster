@@ -168,6 +168,18 @@ const db = {
     remove: id => api(`/post_templates?id=eq.${id}`, { method: 'DELETE', write: true }),
   },
 
+  goals: {
+    list: () => api('/content_goals?select=*&order=sort_order.asc,created_at.asc'),
+    getById: id => api(`/content_goals?select=*&id=eq.${encodeURIComponent(id)}`).then(first),
+    insert: row => api('/content_goals', {
+      method: 'POST', write: true, prefer: 'return=representation', body: [row],
+    }).then(first),
+    update: (id, patch) => api(`/content_goals?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH', write: true, prefer: 'return=representation', body: patch,
+    }).then(first),
+    remove: id => api(`/content_goals?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE', write: true }),
+  },
+
   // Server-side state (OAuth tokens etc.). web_anon has no access to this
   // table, so even reads go through the salon_app_user JWT.
   appState: {

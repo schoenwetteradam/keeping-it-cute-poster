@@ -11,6 +11,7 @@ const DEFAULTS = {
   signaturePhrases: '',
   avoidPhrases: 'I am passionate about; I take pride in; elevate your look',
   boothBenefits: 'Supportive team culture, flexible schedules, professional environment, and room to grow an independent beauty business.',
+  staffRoster: '',
 }
 
 export const dynamic = 'force-dynamic'
