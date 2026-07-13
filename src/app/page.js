@@ -24,6 +24,16 @@ const VARIANTS = [
 const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-pink-400 focus:ring-2 focus:ring-pink-100'
 const panelClass = 'rounded-2xl border border-pink-100 bg-white p-5 shadow-sm sm:p-6'
 
+// PostgREST returns jsonb columns as already-parsed JSON, not a string — but
+// older cached rows or manual edits could still hand back a string, so accept both.
+function parsePlatforms(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) } catch { return [] }
+  }
+  return []
+}
+
 async function api(url, options) {
   const response = await fetch(url, options)
   const data = await response.json().catch(() => ({}))
@@ -969,7 +979,7 @@ function TemplatesPanel({ onLoad }) {
               <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2.5 border border-pink-100">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">{t.name}</p>
-                  <p className="text-xs text-slate-400">{String(t.goal).replaceAll('_', ' ')} · {JSON.parse(t.platforms || '[]').join(', ')}</p>
+                  <p className="text-xs text-slate-400">{String(t.goal).replaceAll('_', ' ')} · {parsePlatforms(t.platforms).join(', ')}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button type="button" onClick={() => { onLoad(t); setOpen(false) }} className="rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-bold text-white">Load</button>
@@ -1263,7 +1273,8 @@ export default function Home() {
   const loadTemplate = template => {
     setGoal(template.goal || 'showcase')
     setContext(template.context || '')
-    try { setSelectedPlatforms(JSON.parse(template.platforms)) } catch { /* keep current */ }
+    const platforms = parsePlatforms(template.platforms)
+    if (platforms.length) setSelectedPlatforms(platforms)
   }
 
   const togglePlatform = platform => {
