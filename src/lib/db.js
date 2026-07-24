@@ -180,6 +180,21 @@ const db = {
     remove: id => api(`/content_goals?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE', write: true }),
   },
 
+  // Booth-rental leads. web_anon has no access (customer PII), so every
+  // operation — including reads — goes through the salon_app_user JWT.
+  leads: {
+    list: () => api('/booth_leads?select=*&order=created_at.desc', { write: true }),
+    getById: id => api(`/booth_leads?select=*&id=eq.${id}`, { write: true }).then(first),
+    insert: row => api('/booth_leads', {
+      method: 'POST', write: true, prefer: 'return=representation',
+      body: [{ ...row, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
+    }).then(first),
+    update: (id, patch) => api(`/booth_leads?id=eq.${id}`, {
+      method: 'PATCH', write: true, prefer: 'return=representation',
+      body: { ...patch, updated_at: new Date().toISOString() },
+    }).then(first),
+  },
+
   // Server-side state (OAuth tokens etc.). web_anon has no access to this
   // table, so even reads go through the salon_app_user JWT.
   appState: {

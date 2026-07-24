@@ -155,6 +155,31 @@ CREATE TABLE salon.app_state (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Booth-rental leads captured by the public /rent landing page and worked
+-- through a simple pipeline in the admin app. This is real people's contact
+-- info (PII), so web_anon's access is revoked below — the public form never
+-- reads or writes this table directly; the Next.js server inserts on its
+-- behalf using the salon_app_user role, and only the admin app reads it back.
+CREATE TABLE salon.booth_leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  phone TEXT DEFAULT '',
+  email TEXT DEFAULT '',
+  services TEXT DEFAULT '',          -- what they do: hair, nails, lashes, etc.
+  timeframe TEXT DEFAULT '',         -- when they're looking to move
+  message TEXT DEFAULT '',
+  source TEXT DEFAULT 'landing_page',
+  status TEXT NOT NULL DEFAULT 'new',
+  status_notes TEXT DEFAULT '',
+  last_contacted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT booth_leads_status_check
+    CHECK (status IN ('new', 'contacted', 'touring', 'signed', 'lost'))
+);
+CREATE INDEX booth_leads_status_idx ON salon.booth_leads (status);
+CREATE INDEX booth_leads_created_idx ON salon.booth_leads (created_at DESC);
+
 -- 3. Read model -------------------------------------------------------------
 -- generated_posts joined with its average rating, used by the dashboard's
 -- list/schedule views so the API doesn't need arbitrary GROUP BY support.
@@ -315,6 +340,10 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA salon TO salon_app_user;
 
 -- app_state stores secrets — anonymous requests must never read it.
 REVOKE ALL ON salon.app_state FROM web_anon;
+
+-- booth_leads holds customer PII — anonymous requests must never read it.
+-- The public form's inserts go through salon_app_user, not web_anon.
+REVOKE ALL ON salon.booth_leads FROM web_anon;
 
 GRANT EXECUTE ON FUNCTION salon.posts_summary() TO web_anon, salon_app_user;
 GRANT EXECUTE ON FUNCTION salon.posts_performance() TO web_anon, salon_app_user;

@@ -919,7 +919,22 @@ function HelpTab() {
         </p>
       </HelpSection>
 
-      <HelpSection id="media" num="07" title="Media library" lede="Every photo and video you've ever uploaded lives here, reusable across future posts.">
+      <HelpSection id="leads" num="07" title="Your rental page & lead pipeline" lede="This is the part that turns posts into actual renters. Don't skip it.">
+        <p className="mb-4 text-sm text-slate-700">
+          The app has a public <b>rental page</b> — a real web page anyone can visit (no login) that pitches renting a chair here and has a &quot;let&apos;s talk&quot; form. When someone fills it out, they land in the <b>Leads</b> tab automatically. That&apos;s the difference between &quot;DM us&quot; (where leads vanish) and a name, number, and follow-up you can actually work.
+        </p>
+        <ol className="space-y-2">
+          <HelpStep n={1}>Open the <b>Leads</b> tab and copy your rental page link (it ends in <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">/rent</code>). Put it in your Instagram bio, your Facebook page, and any &quot;now renting&quot; posts.</HelpStep>
+          <HelpStep n={2}>When an inquiry comes in, it shows up as a <b>New</b> lead with their contact info. Tap the phone or email to reach out.</HelpStep>
+          <HelpStep n={3}>Move each lead down the pipeline as you go: <b>New → Contacted → Touring → Signed</b> (or Lost). Add a note so anyone on the team can see what&apos;s happened.</HelpStep>
+          <HelpStep n={4}>If a new lead sits {STALE_DAYS}+ days without follow-up, the tab flags it in pink. That flag is money leaking — call them.</HelpStep>
+        </ol>
+        <HelpNote type="good">
+          A booth renter is recurring monthly income — one signed renter is worth more than thousands of likes. This pipeline exists so no inquiry ever gets forgotten in someone&apos;s DMs.
+        </HelpNote>
+      </HelpSection>
+
+      <HelpSection id="media" num="08" title="Media library" lede="Every photo and video you've ever uploaded lives here, reusable across future posts.">
         <ol className="space-y-2">
           <HelpStep n={1}>Open the <b>Media</b> tab to browse everything uploaded so far.</HelpStep>
           <HelpStep n={2}>Upload straight from there, or via Upload new while creating a post.</HelpStep>
@@ -927,7 +942,7 @@ function HelpTab() {
         </ol>
       </HelpSection>
 
-      <HelpSection id="brand" num="08" title="Brand Brain" lede="The salon's voice, in one place — read by every single generation.">
+      <HelpSection id="brand" num="09" title="Brand Brain" lede="The salon's voice, in one place — read by every single generation.">
         <p className="mb-4 text-sm text-slate-700">
           This is the fastest lever for making posts sound like <i>this salon</i> and not a generic template — it applies immediately, with zero data needed. Worth 10 minutes with Adam or Jessica to fill in properly, especially:
         </p>
@@ -954,14 +969,14 @@ function HelpTab() {
         </HelpNote>
       </HelpSection>
 
-      <HelpSection id="insights" num="09" title="History & Insights" lede="Where you check what's actually working.">
+      <HelpSection id="insights" num="10" title="History & Insights" lede="Where you check what's actually working.">
         <ul className="space-y-2 text-sm text-slate-700">
           <li><b>History</b> — a calendar of every post ever made. Click a day to see what went out, or scroll the month list.</li>
           <li><b>Insights</b> — totals, the strongest-performing pattern by platform and goal, the Booth Renter Funnel, anything scheduled or stuck on a failed publish, and a Sync Facebook stats button to pull in fresh like/comment/share counts on demand.</li>
         </ul>
       </HelpSection>
 
-      <HelpSection id="status" num="10" title="What's connected" lede="Straight status, so nobody's confused by an error message.">
+      <HelpSection id="status" num="11" title="What's connected" lede="Straight status, so nobody's confused by an error message.">
         <div className="overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full text-left text-sm">
             <thead>
@@ -972,6 +987,7 @@ function HelpTab() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               <tr><td className="px-4 py-2 text-slate-700">Draft, edit, rate, schedule, track renters</td><td className="px-4 py-2"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">● Live</span></td></tr>
+              <tr><td className="px-4 py-2 text-slate-700">Public rental page + Leads pipeline</td><td className="px-4 py-2"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">● Live</span></td></tr>
               <tr><td className="px-4 py-2 text-slate-700">Publish directly to Facebook / Instagram</td><td className="px-4 py-2"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">● Live</span></td></tr>
               <tr><td className="px-4 py-2 text-slate-700">Publish directly to LinkedIn</td><td className="px-4 py-2"><span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">● Not yet connected</span></td></tr>
             </tbody>
@@ -982,7 +998,7 @@ function HelpTab() {
         </HelpNote>
       </HelpSection>
 
-      <HelpSection id="help" num="11" title="If something breaks">
+      <HelpSection id="help" num="12" title="If something breaks">
         <ol className="space-y-2">
           <HelpStep n={1}>Try reloading the page first — fixes most one-off glitches.</HelpStep>
           <HelpStep n={2}>Note what you were doing and the exact error text, if any — a screenshot is ideal.</HelpStep>
@@ -1591,6 +1607,223 @@ function Results({ posts, setPosts, postIds, mediaUrl, employeeName, linkedinCon
   )
 }
 
+// ── Leads ─────────────────────────────────────────────────────────────────────
+
+const LEAD_STATUSES = [
+  { id: 'new', label: 'New', color: 'bg-pink-100 text-pink-700' },
+  { id: 'contacted', label: 'Contacted', color: 'bg-blue-100 text-blue-700' },
+  { id: 'touring', label: 'Touring', color: 'bg-amber-100 text-amber-700' },
+  { id: 'signed', label: 'Signed', color: 'bg-emerald-100 text-emerald-700' },
+  { id: 'lost', label: 'Lost', color: 'bg-slate-200 text-slate-500' },
+]
+
+const STALE_DAYS = 2
+
+function daysSince(iso) {
+  if (!iso) return null
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+}
+
+function LeadCard({ lead, onUpdate }) {
+  const [status, setStatus] = useState(lead.status)
+  const [notes, setNotes] = useState(lead.status_notes || '')
+  const [savingNotes, setSavingNotes] = useState(false)
+  const [notesSaved, setNotesSaved] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const age = daysSince(lead.created_at)
+  const isStale = status === 'new' && age !== null && age >= STALE_DAYS
+
+  const changeStatus = async newStatus => {
+    setBusy(true)
+    const prev = status
+    setStatus(newStatus)
+    try {
+      const data = await api(`/api/leads/${lead.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      onUpdate(data.lead)
+    } catch {
+      setStatus(prev)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveNotes = async () => {
+    setSavingNotes(true)
+    try {
+      const data = await api(`/api/leads/${lead.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusNotes: notes }),
+      })
+      onUpdate(data.lead)
+      setNotesSaved(true)
+      setTimeout(() => setNotesSaved(false), 2000)
+    } catch { /* ignore */ }
+    finally { setSavingNotes(false) }
+  }
+
+  const statusInfo = LEAD_STATUSES.find(s => s.id === status) || LEAD_STATUSES[0]
+
+  return (
+    <div className={`rounded-2xl border bg-white p-4 shadow-sm ${isStale ? 'border-pink-300' : 'border-slate-100'}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-bold text-slate-900">{lead.name}</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            {age === 0 ? 'Today' : age === 1 ? 'Yesterday' : `${age} days ago`}
+            {lead.source === 'landing_page' ? ' · from rental page' : ''}
+          </p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusInfo.color}`}>{statusInfo.label}</span>
+      </div>
+
+      {isStale ? (
+        <div className="mt-3 rounded-lg border border-pink-200 bg-pink-50 px-3 py-2 text-xs font-semibold text-pink-700">
+          ⏰ Waiting {age} days with no follow-up. Reach out before this one goes cold.
+        </div>
+      ) : null}
+
+      <div className="mt-3 grid gap-1.5 text-sm text-slate-700">
+        {lead.phone ? <p><span className="font-semibold text-slate-500">Phone:</span> <a href={`tel:${lead.phone}`} className="text-pink-700 hover:underline">{lead.phone}</a></p> : null}
+        {lead.email ? <p><span className="font-semibold text-slate-500">Email:</span> <a href={`mailto:${lead.email}`} className="text-pink-700 hover:underline">{lead.email}</a></p> : null}
+        {lead.services ? <p><span className="font-semibold text-slate-500">Does:</span> {lead.services}</p> : null}
+        {lead.timeframe ? <p><span className="font-semibold text-slate-500">Timeframe:</span> {lead.timeframe}</p> : null}
+        {lead.message ? <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-slate-600">{lead.message}</p> : null}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-slate-500">Status:</span>
+        {LEAD_STATUSES.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            disabled={busy}
+            onClick={() => changeStatus(s.id)}
+            className={`rounded-full px-3 py-1 text-xs font-bold transition disabled:opacity-50 ${status === s.id ? s.color : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3">
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          rows={2}
+          className={`${inputClass} text-sm`}
+          placeholder="Notes — who called them, what was said, next step…"
+        />
+        <div className="mt-1.5 flex items-center gap-3">
+          <button type="button" onClick={saveNotes} disabled={savingNotes} className="rounded-lg border border-pink-200 px-3 py-1.5 text-xs font-bold text-pink-700 hover:bg-pink-50 disabled:opacity-50">
+            {savingNotes ? 'Saving…' : 'Save notes'}
+          </button>
+          {notesSaved ? <span className="text-xs font-semibold text-emerald-600">Saved ✓</span> : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LeadsTab() {
+  const [leads, setLeads] = useState(null)
+  const [error, setError] = useState('')
+  const [filter, setFilter] = useState('open')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    api('/api/leads').then(d => setLeads(d.leads || [])).catch(err => setError(err.message))
+  }, [])
+
+  const applyUpdate = updated => setLeads(ls => ls.map(l => l.id === updated.id ? updated : l))
+
+  const rentUrl = typeof window !== 'undefined' ? `${window.location.origin}/rent` : '/rent'
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(rentUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch { /* ignore */ }
+  }
+
+  if (error) return <section className={panelClass}><Notice type="error">{error}</Notice></section>
+  if (!leads) return <section className={panelClass}><p className="text-sm text-slate-400">Loading leads…</p></section>
+
+  const counts = LEAD_STATUSES.reduce((acc, s) => ({ ...acc, [s.id]: leads.filter(l => l.status === s.id).length }), {})
+  const openLeads = leads.filter(l => l.status !== 'signed' && l.status !== 'lost')
+  const staleCount = openLeads.filter(l => l.status === 'new' && (daysSince(l.created_at) ?? 0) >= STALE_DAYS).length
+
+  const visible = filter === 'open'
+    ? openLeads
+    : filter === 'all'
+      ? leads
+      : leads.filter(l => l.status === filter)
+
+  return (
+    <div className="space-y-5">
+      <section className={panelClass}>
+        <h2 className="text-lg font-bold text-slate-900">Booth Rental Leads</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Everyone who&apos;s asked about renting a chair — from the public rental page or added by hand.
+          Work each one down the pipeline and it stops slipping through the cracks.
+        </p>
+
+        <div className="mt-4 rounded-xl border border-pink-100 bg-pink-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-pink-600">Your rental page</p>
+          <p className="mt-1 text-sm text-slate-600">Put this link in your Instagram bio, Facebook page, and posts. Anyone who fills it out shows up here automatically.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-pink-700">{rentUrl}</code>
+            <button type="button" onClick={copyLink} className="rounded-lg border border-pink-300 px-3 py-2 text-xs font-bold text-pink-700 hover:bg-white">
+              {copied ? 'Copied ✓' : 'Copy link'}
+            </button>
+            <a href="/rent" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-pink-300 px-3 py-2 text-xs font-bold text-pink-700 hover:bg-white">
+              Preview page
+            </a>
+          </div>
+        </div>
+
+        {staleCount > 0 ? (
+          <div className="mt-4 rounded-xl border border-pink-200 bg-white px-4 py-3 text-sm font-semibold text-pink-700">
+            ⏰ {staleCount} {staleCount === 1 ? 'lead has' : 'leads have'} been waiting {STALE_DAYS}+ days with no follow-up.
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" onClick={() => setFilter('open')} className={`rounded-full px-3 py-1.5 text-xs font-bold ${filter === 'open' ? 'bg-pink-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            Open ({openLeads.length})
+          </button>
+          {LEAD_STATUSES.map(s => (
+            <button key={s.id} type="button" onClick={() => setFilter(s.id)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${filter === s.id ? 'bg-pink-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              {s.label} ({counts[s.id]})
+            </button>
+          ))}
+          <button type="button" onClick={() => setFilter('all')} className={`rounded-full px-3 py-1.5 text-xs font-bold ${filter === 'all' ? 'bg-pink-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            All ({leads.length})
+          </button>
+        </div>
+      </section>
+
+      {visible.length === 0 ? (
+        <section className={panelClass}>
+          <p className="text-sm text-slate-400">
+            {leads.length === 0
+              ? 'No leads yet. Share your rental page link above — new inquiries will appear here the moment someone fills out the form.'
+              : 'No leads in this view.'}
+          </p>
+        </section>
+      ) : (
+        <div className="space-y-3">
+          {visible.map(lead => <LeadCard key={lead.id} lead={lead} onUpdate={applyUpdate} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -1697,6 +1930,7 @@ export default function Home() {
     ['library', 'Media'],
     ['history', 'History'],
     ['insights', 'Insights'],
+    ['leads', 'Leads'],
     ['settings', 'Brand Brain'],
     ['help', 'Help'],
   ]
@@ -1734,6 +1968,7 @@ export default function Home() {
       <div className="mx-auto max-w-5xl px-4 py-8">
         {activeTab === 'library' ? <MediaLibrary onUse={useLibraryItem} /> : null}
         {activeTab === 'settings' ? <SettingsTab /> : null}
+        {activeTab === 'leads' ? <LeadsTab /> : null}
         {activeTab === 'help' ? <HelpTab /> : null}
         {activeTab === 'insights' ? <InsightsTab /> : null}
         {activeTab === 'history' ? <HistoryTab /> : null}

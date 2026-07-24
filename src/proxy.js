@@ -4,11 +4,26 @@ import { NextResponse } from 'next/server'
 // with `Authorization: Bearer ${CRON_SECRET}` instead of basic auth.
 const CRON_PATHS = new Set(['/api/schedule/process', '/api/posts/sync-all'])
 
+// Public pages/endpoints that must be reachable without the salon login —
+// the booth-rental landing page and its form submission. Everything else,
+// including GET /api/leads (which returns customer PII), stays gated.
+const PUBLIC_PATHS = new Set(['/rent'])
+
 export function proxy(request) {
   const { pathname } = request.nextUrl
   const auth = request.headers.get('authorization')
 
   if (pathname === '/api/health') {
+    return NextResponse.next()
+  }
+
+  if (PUBLIC_PATHS.has(pathname)) {
+    return NextResponse.next()
+  }
+
+  // The landing page's contact form posts here; only POST is public. GET
+  // /api/leads lists real leads and stays behind the login below.
+  if (pathname === '/api/leads' && request.method === 'POST') {
     return NextResponse.next()
   }
 
