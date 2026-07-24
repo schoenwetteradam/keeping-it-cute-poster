@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { cleanText } from '@/lib/validation'
 import { rateLimit } from '@/lib/rateLimit'
+import { sendLeadNotification } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,10 @@ export async function POST(request) {
       source: 'landing_page',
       status: 'new',
     })
+
+    // Notify the owners. Best-effort and awaited (so it completes before the
+    // serverless function freezes) — never throws, so it can't fail the save.
+    await sendLeadNotification(lead)
 
     return NextResponse.json({ success: true, id: lead?.id })
   } catch (error) {
