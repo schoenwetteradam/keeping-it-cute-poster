@@ -81,6 +81,37 @@ const BENEFITS = [
   { Icon: EarningsIcon, title: 'Keep what you earn', body: 'A flat, predictable rent instead of a commission split. The more you grow, the more stays in your pocket.' },
 ]
 
+// Real business details (from the salon's Google Business Profile).
+const SALON = {
+  addressLine: '144 E Oak St',
+  cityStateZip: 'Juneau, WI 53039',
+  phoneDisplay: '(920) 306-9520',
+  phoneHref: '+19203069520',
+  website: 'keepingitcute.net',
+  websiteHref: 'https://keepingitcute.net',
+  mapsHref: 'https://www.google.com/maps/search/?api=1&query=Keeping+It+Cute+Salon+%26+Spa+144+E+Oak+St+Juneau+WI+53039',
+  googleRating: '4.9',
+}
+
+// Real client reviews (Google).
+const REVIEWS = [
+  { quote: 'So happy I found a place that makes me feel like a valued customer!', name: 'Zindars Development', source: 'Google' },
+  { quote: 'She did an excellent job, my feet feel so soft and the polish is perfect.', name: 'Andrea Rosenow', source: 'Google' },
+  { quote: 'Very happy with service and price.', name: 'Donna Chase', source: 'Google' },
+]
+
+function Stars({ className = '' }) {
+  return (
+    <div className={`inline-flex ${className}`} aria-label="5 out of 5 stars">
+      {[0, 1, 2, 3, 4].map(i => (
+        <svg key={i} width="18" height="18" viewBox="0 0 24 24" fill="#f5b301" stroke="none" aria-hidden="true">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14l-5-4.87 6.91-1.01L12 2z" />
+        </svg>
+      ))}
+    </div>
+  )
+}
+
 export default async function RentPage() {
   const brand = await getBrand()
   const location = brand.location
@@ -182,7 +213,40 @@ export default async function RentPage() {
         </div>
       </section>
 
-      {/* Established storefront */}
+      {/* Reviews / social proof */}
+      <Reveal as="section" className="mx-auto max-w-4xl px-5 py-10">
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm ring-1 ring-pink-100">
+            <Stars />
+            <span className="text-sm font-bold text-slate-800">{SALON.googleRating} on Google</span>
+          </div>
+          <h2 className="mt-4 text-2xl font-black text-slate-950 sm:text-3xl">A salon your clients already love</h2>
+          <p className="mx-auto mt-2 max-w-xl text-slate-600">
+            A busy, well-reviewed salon means a steady stream of happy clients and referrals — the kind
+            of momentum that helps a booth renter grow fast.
+          </p>
+        </div>
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {REVIEWS.map((r, i) => (
+            <Reveal
+              key={r.name}
+              delay={i * 90}
+              className="flex flex-col rounded-2xl border border-pink-100 bg-white p-5 shadow-sm"
+            >
+              <Stars className="mb-3" />
+              <p className="flex-1 text-sm leading-relaxed text-slate-700">&ldquo;{r.quote}&rdquo;</p>
+              <p className="mt-4 text-xs font-semibold text-slate-500">{r.name} · <span className="text-slate-400">{r.source}</span></p>
+            </Reveal>
+          ))}
+        </div>
+        <p className="mt-6 text-center">
+          <a href={SALON.mapsHref} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-pink-700 hover:underline">
+            Read all reviews on Google →
+          </a>
+        </p>
+      </Reveal>
+
+      {/* Established storefront + visit us */}
       <Reveal as="section" className="mx-auto max-w-4xl px-5 py-8">
         <div className="grid items-center gap-6 sm:grid-cols-2">
           <figure className="group mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm transition duration-300 hover:shadow-md">
@@ -200,10 +264,34 @@ export default async function RentPage() {
           <div className="text-center sm:text-left">
             <h2 className="text-2xl font-black text-slate-950">A real home for your business</h2>
             <p className="mt-3 text-slate-600">
-              {brand.salonName} is an established, welcoming salon{location ? ` right in ${location}` : ''} —
-              with walk-by visibility, a loyal local following, and a space that already feels like home.
-              Step into a business that&apos;s ready for you on day one.
+              {brand.salonName} is an established, welcoming salon in the heart of {SALON.cityStateZip.split(',')[0]},
+              Wisconsin — with walk-by visibility, a loyal local following, and a space that already feels
+              like home. Step into a business that&apos;s ready for you on day one.
             </p>
+            <div className="mt-5 space-y-2 text-sm">
+              <p className="flex items-center justify-center gap-2 text-slate-700 sm:justify-start">
+                <span className="text-pink-600">📍</span>
+                <a href={SALON.mapsHref} target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-pink-700 hover:underline">
+                  {SALON.addressLine}, {SALON.cityStateZip}
+                </a>
+              </p>
+              <p className="flex items-center justify-center gap-2 text-slate-700 sm:justify-start">
+                <span className="text-pink-600">📞</span>
+                <a href={`tel:${SALON.phoneHref}`} className="font-semibold hover:text-pink-700 hover:underline">{SALON.phoneDisplay}</a>
+              </p>
+              <p className="flex items-center justify-center gap-2 text-slate-700 sm:justify-start">
+                <span className="text-pink-600">🌐</span>
+                <a href={SALON.websiteHref} target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-pink-700 hover:underline">{SALON.website}</a>
+              </p>
+            </div>
+            <a
+              href={SALON.mapsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-5 inline-block rounded-full border-2 border-pink-600 px-6 py-2.5 text-sm font-bold text-pink-700 transition hover:bg-pink-600 hover:text-white"
+            >
+              Get directions
+            </a>
           </div>
         </div>
       </Reveal>
@@ -222,8 +310,14 @@ export default async function RentPage() {
         </div>
       </Reveal>
 
-      <footer className="border-t border-pink-100 py-8 text-center text-sm text-slate-400">
-        {brand.salonName}{location ? ` · ${location}` : ''}
+      <footer className="border-t border-pink-100 py-8 text-center text-sm text-slate-500">
+        <p className="font-bold text-slate-700">{brand.salonName}</p>
+        <p className="mt-1">{SALON.addressLine}, {SALON.cityStateZip}</p>
+        <p className="mt-1">
+          <a href={`tel:${SALON.phoneHref}`} className="hover:text-pink-700 hover:underline">{SALON.phoneDisplay}</a>
+          {' · '}
+          <a href={SALON.websiteHref} target="_blank" rel="noopener noreferrer" className="hover:text-pink-700 hover:underline">{SALON.website}</a>
+        </p>
       </footer>
     </main>
   )
