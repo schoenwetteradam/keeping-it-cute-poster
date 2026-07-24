@@ -37,7 +37,7 @@ export async function generateMetadata() {
 
 const BENEFITS = [
   { title: 'Be your own boss', body: 'Set your own hours, prices, and services. Your clients, your brand, your business — just without the overhead of your own storefront.' },
-  { title: 'An established location', body: 'Walk into a professional, fully-equipped salon with foot traffic and a reputation already built. Skip the years it takes to establish a space.' },
+  { title: 'An established location', body: 'Walk into a professional, fully-equipped salon with a reputation already built. Skip the years it takes to establish a space.' },
   { title: 'A supportive team', body: 'Share a space with other beauty professionals who lift each other up — referrals, community, and a place you actually want to work.' },
   { title: 'Keep what you earn', body: 'A flat, predictable rent instead of a commission split. The more you grow, the more stays in your pocket.' },
 ]
