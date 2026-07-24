@@ -21,6 +21,11 @@ export function proxy(request) {
     return NextResponse.next()
   }
 
+  // Static marketing assets the public landing page needs (photos of the salon).
+  if (pathname.startsWith('/images/')) {
+    return NextResponse.next()
+  }
+
   // The landing page's contact form posts here; only POST is public. GET
   // /api/leads lists real leads and stays behind the login below.
   if (pathname === '/api/leads' && request.method === 'POST') {
