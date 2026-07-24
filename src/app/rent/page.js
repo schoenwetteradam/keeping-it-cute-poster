@@ -69,6 +69,35 @@ export default async function RentPage() {
         </a>
       </section>
 
+      {/* See the space */}
+      <section className="mx-auto max-w-5xl px-5 py-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <figure className="overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm">
+            <img
+              src="/images/salon-styling-room.jpg"
+              alt="A bright styling suite with white-and-gold chairs, arched mirrors, and marble flooring"
+              width={1600}
+              height={1200}
+              loading="lazy"
+              className="aspect-[4/3] w-full object-cover"
+            />
+            <figcaption className="px-4 py-3 text-sm font-semibold text-slate-600">Styling suite — your chair, ready to go</figcaption>
+          </figure>
+          <figure className="overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm">
+            <img
+              src="/images/salon-spa-room.jpg"
+              alt="A soft, welcoming esthetics and spa treatment room with gold shelving and greenery"
+              width={1600}
+              height={1200}
+              loading="lazy"
+              className="aspect-[4/3] w-full object-cover"
+            />
+            <figcaption className="px-4 py-3 text-sm font-semibold text-slate-600">Esthetics &amp; spa room — for skin, lashes &amp; more</figcaption>
+          </figure>
+        </div>
+        <p className="mt-3 text-center text-sm text-slate-500">Real rooms at {brand.salonName} — move-in ready and waiting for you.</p>
+      </section>
+
       {/* Salon's own pitch */}
       {brand.boothBenefits ? (
         <section className="mx-auto max-w-2xl px-5 py-6">
