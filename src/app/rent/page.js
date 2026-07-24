@@ -49,10 +49,14 @@ export default async function RentPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#fdf4f9] to-white text-slate-800">
       {/* Hero */}
-      <section className="mx-auto max-w-3xl px-5 pt-16 pb-10 text-center sm:pt-24">
-        <p className="mb-3 text-sm font-bold uppercase tracking-widest text-pink-600">
-          {brand.salonName}
-        </p>
+      <section className="mx-auto max-w-3xl px-5 pt-12 pb-10 text-center sm:pt-16">
+        <img
+          src="/images/logo.png"
+          alt={brand.salonName}
+          width={160}
+          height={160}
+          className="mx-auto mb-5 h-32 w-32 object-contain sm:h-36 sm:w-36"
+        />
         <h1 className="text-4xl font-black leading-tight tracking-tight text-slate-950 sm:text-5xl">
           Rent your chair.<br />Grow your own business.
         </h1>
@@ -116,6 +120,30 @@ export default async function RentPage() {
               <p className="mt-2 text-sm leading-relaxed text-slate-600">{b.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Established storefront */}
+      <section className="mx-auto max-w-4xl px-5 py-8">
+        <div className="grid items-center gap-6 sm:grid-cols-2">
+          <figure className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm">
+            <img
+              src="/images/salon-storefront.jpg"
+              alt={`The ${brand.salonName} storefront${location ? ` in ${location}` : ''}`}
+              width={1000}
+              height={1333}
+              loading="lazy"
+              className="w-full object-cover"
+            />
+          </figure>
+          <div className="text-center sm:text-left">
+            <h2 className="text-2xl font-black text-slate-950">A real home for your business</h2>
+            <p className="mt-3 text-slate-600">
+              {brand.salonName} is an established, welcoming salon{location ? ` right in ${location}` : ''} —
+              with walk-by visibility, a loyal local following, and a space that already feels like home.
+              Step into a business that&apos;s ready for you on day one.
+            </p>
+          </div>
         </div>
       </section>
 

@@ -1953,9 +1953,12 @@ export default function Home() {
       <header className="border-b border-pink-100 bg-white">
         <div className="mx-auto max-w-5xl px-4 py-6">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-            <div>
-              <h1 className="text-3xl font-black tracking-tight text-slate-950">Keeping It Cute</h1>
-              <p className="mt-1 text-sm font-semibold text-pink-600">Salon social content assistant</p>
+            <div className="flex items-center gap-3">
+              <img src="/images/logo.png" alt="" width={56} height={56} className="h-14 w-14 shrink-0 object-contain" />
+              <div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950">Keeping It Cute</h1>
+                <p className="mt-1 text-sm font-semibold text-pink-600">Salon social content assistant</p>
+              </div>
             </div>
             <p className="max-w-md text-sm text-slate-500">Create on-brand drafts, preview them, schedule or publish, and learn what actually connects.</p>
           </div>
