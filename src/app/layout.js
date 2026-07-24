@@ -3,6 +3,10 @@ import './globals.css'
 export const metadata = {
   title: 'Keeping It Cute Poster',
   description: 'Generate social media posts for Keeping It Cute Salon & Spa',
+  icons: {
+    icon: '/images/favicon.png',
+    apple: '/images/favicon.png',
+  },
 }
 
 export default function RootLayout({ children }) {
