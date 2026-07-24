@@ -1,3 +1,58 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Landing-page motion (tasteful, on-brand) ─────────────────────────── */
+
+@keyframes kic-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-18px); }
+}
+@keyframes kic-pop-in {
+  0%   { opacity: 0; transform: scale(0.82); }
+  60%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes kic-sheen {
+  0%   { transform: translateX(-140%) skewX(-12deg); }
+  100% { transform: translateX(260%) skewX(-12deg); }
+}
+
+.animate-float { animation: kic-float 6s ease-in-out infinite; }
+.animate-pop-in { animation: kic-pop-in 0.7s cubic-bezier(.16,.84,.44,1) both; }
+
+/* Scroll reveal — content is present in the DOM (SEO-safe); only the visual
+   transition is JS-driven. */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .7s cubic-bezier(.16,.84,.44,1),
+              transform .7s cubic-bezier(.16,.84,.44,1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible { opacity: 1; transform: none; }
+
+/* Button sheen on hover */
+.btn-sheen { position: relative; overflow: hidden; }
+.btn-sheen::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  height: 100%; width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+  transform: translateX(-140%) skewX(-12deg);
+  pointer-events: none;
+}
+.btn-sheen:hover::after { animation: kic-sheen .9s ease; }
+
+/* If JavaScript is disabled, never leave reveal content hidden. */
+@media (scripting: none) {
+  .reveal { opacity: 1; transform: none; }
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .animate-float, .animate-pop-in { animation: none !important; }
+  .btn-sheen:hover::after { animation: none !important; }
+}
