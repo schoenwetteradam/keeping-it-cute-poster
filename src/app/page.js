@@ -1689,8 +1689,12 @@ function LeadCard({ lead, onUpdate }) {
       <div className="mt-3 grid gap-1.5 text-sm text-slate-700">
         {lead.phone ? <p><span className="font-semibold text-slate-500">Phone:</span> <a href={`tel:${lead.phone}`} className="text-pink-700 hover:underline">{lead.phone}</a></p> : null}
         {lead.email ? <p><span className="font-semibold text-slate-500">Email:</span> <a href={`mailto:${lead.email}`} className="text-pink-700 hover:underline">{lead.email}</a></p> : null}
-        {lead.services ? <p><span className="font-semibold text-slate-500">Does:</span> {lead.services}</p> : null}
+        {lead.services ? <p><span className="font-semibold text-slate-500">Specialty:</span> {lead.services}</p> : null}
+        {lead.license_status ? <p><span className="font-semibold text-slate-500">License:</span> {lead.license_status}</p> : null}
+        {lead.current_situation ? <p><span className="font-semibold text-slate-500">Works now:</span> {lead.current_situation}</p> : null}
+        {lead.client_base ? <p><span className="font-semibold text-slate-500">Clients:</span> {lead.client_base}</p> : null}
         {lead.timeframe ? <p><span className="font-semibold text-slate-500">Timeframe:</span> {lead.timeframe}</p> : null}
+        {lead.availability ? <p><span className="font-semibold text-slate-500">Availability:</span> {lead.availability}</p> : null}
         {lead.message ? <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-slate-600">{lead.message}</p> : null}
       </div>
 
