@@ -165,8 +165,12 @@ CREATE TABLE salon.booth_leads (
   name TEXT NOT NULL,
   phone TEXT DEFAULT '',
   email TEXT DEFAULT '',
-  services TEXT DEFAULT '',          -- what they do: hair, nails, lashes, etc.
-  timeframe TEXT DEFAULT '',         -- when they're looking to move
+  services TEXT DEFAULT '',           -- primary specialty: hair, nails, lashes, etc.
+  license_status TEXT DEFAULT '',     -- licensed & practicing / recently licensed / in school / etc.
+  current_situation TEXT DEFAULT '',  -- renting elsewhere / commission / suite / from home / etc.
+  client_base TEXT DEFAULT '',        -- full book / some regulars / building / just starting
+  timeframe TEXT DEFAULT '',          -- when they're looking to move
+  availability TEXT DEFAULT '',       -- full-time / part-time / weekends / flexible
   message TEXT DEFAULT '',
   source TEXT DEFAULT 'landing_page',
   status TEXT NOT NULL DEFAULT 'new',
